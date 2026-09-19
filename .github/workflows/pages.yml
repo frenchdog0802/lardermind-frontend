@@ -1,0 +1,63 @@
+name: Deploy Cloudflare Pages
+
+on:
+  push:
+    branches: [main, master]
+
+env:
+  VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || secrets.VITE_API_BASE_URL }}
+  VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID || secrets.VITE_GOOGLE_CLIENT_ID }}
+
+jobs:
+  install:
+    name: Install dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+  build:
+    name: Build
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Require VITE_API_BASE_URL
+        run: |
+          if [ -z "$VITE_API_BASE_URL" ]; then
+            echo "Set Actions variable or secret VITE_API_BASE_URL to the Worker base URL (no trailing slash)."
+            exit 1
+          fi
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages-dist
+          path: dist/app
+          retention-days: 1
+
+  deploy:
+    name: Deploy Pages
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pages-dist
+          path: dist/app
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deploy Pages
+        run: npx wrangler pages deploy dist/app --project-name=lardermind-web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
