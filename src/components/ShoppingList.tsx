@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftIcon, PlusIcon, CheckIcon, SearchIcon, TrashIcon } from 'lucide-react';
+import { PlusIcon, CheckIcon, SearchIcon, TrashIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
-import { IngredientEntry, PantryItem, ShoppingListItem } from '../api/types';
+import { IngredientEntry, ShoppingListItem } from '../api/types';
 import useSearchIngredients from '../hooks/useSearchIngredient';
 import { NumberInput } from './NumberInput';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
-import { AskAiEmptyCta } from './AskAiEmptyCta';
+import { AppHeader } from './AppHeader';
 import type { MeasurementSystem } from '../utils/units';
 
 interface ShoppingListProps {
     onBack: () => void;
-    onAskAi?: (prompt: string) => void;
+    onOpenMenu?: () => void;
 }
 
-export function ShoppingList({ onBack, onAskAi }: ShoppingListProps) {
+export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps) {
     const { t } = useTranslation();
     const {
         shoppingList: oriShoppingList,
@@ -201,15 +201,8 @@ export function ShoppingList({ onBack, onAskAi }: ShoppingListProps) {
 
     return (
         <div className="flex flex-col w-full min-h-screen bg-linen">
-            <div className="flex-1 overflow-y-auto pb-20 lg:pb-6">
-                {/* Page title */}
-                <div className="max-w-3xl mx-auto px-6 lg:px-8 py-6 flex items-center gap-4">
-                    <button onClick={onBack} className="lg:hidden p-2 rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors" aria-label={t('common.back')}>
-                        <ArrowLeftIcon size={22} />
-                    </button>
-                    <h1 className="page-title animate-fade-in">{t('shopping.title')}</h1>
-                </div>
-
+            <AppHeader title={t('shopping.title')} onOpenMenu={onOpenMenu} />
+            <div className="flex-1 overflow-y-auto">
                 {/* Main Content */}
                 <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 py-6">
                     {/* Success Message Alert */}
@@ -397,12 +390,6 @@ export function ShoppingList({ onBack, onAskAi }: ShoppingListProps) {
                                 <p className="text-muted">{t('shopping.empty')}</p>
                                 {shoppingSearchQuery ? (
                                     <p className="text-muted text-sm mt-1">Try a different search term</p>
-                                ) : onAskAi ? (
-                                    <AskAiEmptyCta
-                                        hint={t('ai.emptyHint')}
-                                        label={t('ai.emptyCta.shopping')}
-                                        onClick={() => onAskAi(t('ai.emptyPrompts.shopping'))}
-                                    />
                                 ) : null}
                             </div>
                         ) : (

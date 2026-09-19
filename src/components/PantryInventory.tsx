@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftIcon, PlusIcon, MinusIcon, TrashIcon, SearchIcon, PackageIcon } from 'lucide-react';
+import { PlusIcon, MinusIcon, TrashIcon, SearchIcon, PackageIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { IngredientEntry, PantryItem } from '../api/types';
 import useSearchIngredients from '../hooks/useSearchIngredient';
 import { NumberInput } from './NumberInput';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
-import { AskAiEmptyCta } from './AskAiEmptyCta';
+import { AppHeader } from './AppHeader';
 import type { MeasurementSystem } from '../utils/units';
 
 interface PantryInventoryProps {
     onBack: () => void;
-    onAskAi?: (prompt: string) => void;
+    onOpenMenu?: () => void;
 }
 
-export function PantryInventory({ onBack, onAskAi }: PantryInventoryProps) {
+export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventoryProps) {
     const { t } = useTranslation();
     const {
         pantryItems: oriPantryItems,
@@ -151,21 +151,18 @@ export function PantryInventory({ onBack, onAskAi }: PantryInventoryProps) {
 
     return (
         <div className="flex flex-col w-full min-h-screen bg-linen">
-            <div className="flex-1 overflow-y-auto pb-20 lg:pb-6">
-                <div className="max-w-3xl mx-auto px-6 lg:px-8 py-6 flex items-center gap-4">
-                    <button onClick={onBack} className="lg:hidden p-2 rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors" aria-label={t('common.back')}>
-                        <ArrowLeftIcon size={22} />
-                    </button>
-                    <div>
-                        <h1 className="page-title animate-fade-in">{t('pantry.title')}</h1>
-                        <p className="page-subtitle mt-1">
-                            {filteredItems.length} item{filteredItems.length === 1 ? '' : 's'}
-                            {needsBuyingCount > 0 ? ` · ${needsBuyingCount} to buy` : ''}
-                        </p>
-                    </div>
-                </div>
-
-                <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 pb-6">
+            <AppHeader
+                title={t('pantry.title')}
+                onOpenMenu={onOpenMenu}
+                subtitle={
+                    <>
+                        {filteredItems.length} item{filteredItems.length === 1 ? '' : 's'}
+                        {needsBuyingCount > 0 ? ` · ${needsBuyingCount} to buy` : ''}
+                    </>
+                }
+            />
+            <div className="flex-1 overflow-y-auto">
+                <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 py-6">
                     <div className="relative mb-4">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <SearchIcon size={18} className="text-muted" />
@@ -319,12 +316,6 @@ export function PantryInventory({ onBack, onAskAi }: PantryInventoryProps) {
                             <p className="text-ink font-medium">{t('pantry.empty')}</p>
                             {searchQuery ? (
                                 <p className="text-muted text-sm mt-1">{t('common.tryDifferentSearch')}</p>
-                            ) : onAskAi ? (
-                                <AskAiEmptyCta
-                                    hint={t('ai.emptyHint')}
-                                    label={t('ai.emptyCta.pantry')}
-                                    onClick={() => onAskAi(t('ai.emptyPrompts.pantry'))}
-                                />
                             ) : null}
                         </div>
                     ) : (

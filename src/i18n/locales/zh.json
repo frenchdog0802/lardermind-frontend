@@ -25,13 +25,21 @@
   },
   "nav": {
     "home": "首頁",
-    "aiChat": "AI 對話",
+    "aiChat": "對話",
     "calendar": "行事曆",
     "pantry": "食材庫",
+    "inventory": "庫存",
     "shoppingList": "購物清單",
     "shopping": "購物",
     "recipes": "食譜",
     "settings": "設定",
+    "subscription": "訂閱",
+    "recents": "最近對話",
+    "newChat": "新對話",
+    "openMenu": "開啟選單",
+    "closeMenu": "關閉選單",
+    "recentsEmpty": "尚無最近對話",
+    "recentsLoadError": "無法載入對話",
     "tagline": "AI 助手，依照冰箱裡的食材幫你規劃菜單。"
   },
   "mealTypes": {
@@ -223,6 +231,9 @@
     "mealSuggestions": "餐點建議",
     "placeholder": "詢問烹飪、菜單或食譜...",
     "welcome": "嗨！告訴我你需要什麼 — 匯入食譜網址、規劃本週菜單、更新冰箱庫存，或問我能煮什麼。我會幫你處理並顯示變更。",
+    "greetingMorning": "早安",
+    "greetingAfternoon": "午安",
+    "greetingEvening": "晚安",
     "newChat": "新對話",
     "emptyHint": "不用自己填表單 — 直接跟 AI 說你要什麼。",
     "emptyCta": {

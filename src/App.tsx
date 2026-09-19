@@ -1,7 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useEffect, useState } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { Home } from './components/Home';
 import { Calendar } from './components/Calendar';
 import { PantryInventory } from './components/PantryInventory';
 import { ShoppingList } from './components/ShoppingList';
@@ -13,27 +11,29 @@ import { Loading } from './components/Loading';
 import { PantryProvider } from './contexts/pantryContext';
 import { AuthProvider, useAuth } from './contexts/authContext';
 import { AICookingAssistant } from './components/AICookingAssistant';
-import { BottomNav } from './components/BottomNav';
-import { Sidebar } from './components/Sidebar';
+import { AppDrawer, type AppDrawerView } from './components/AppDrawer';
+import { SubscriptionView } from './components/SubscriptionView';
 import { MarketingLanding } from './components/MarketingLanding';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 const GUEST_VIEWS = new Set(['landing', 'login', 'signup']);
 const KEEP_ALIVE_VIEWS = [
-  'home',
   'aiAssistant',
   'calendar',
   'recipeManager',
   'pantryInventory',
   'shoppingList',
   'settings',
+  'subscription',
 ] as const;
 
 function AppContent() {
-  const { t } = useTranslation();
   const [currentView, setCurrentView] = useState('aiAssistant');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [pendingAiPrompt, setPendingAiPrompt] = useState<string | null>(null);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [requestNewChat, setRequestNewChat] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [visitedViews, setVisitedViews] = useState<Set<string>>(() => new Set(['aiAssistant']));
   const [subscriptionNotice, setSubscriptionNotice] = useState<'success' | 'cancelled' | null>(null);
   const {
@@ -50,7 +50,7 @@ function AppContent() {
     if (subscriptionParam === 'success' || subscriptionParam === 'cancelled') {
       setSubscriptionNotice(subscriptionParam);
       if (isAuthenticated) {
-        setCurrentView('settings');
+        setCurrentView('subscription');
       }
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -66,7 +66,9 @@ function AppContent() {
     }
 
     setCurrentView((prev) =>
-      prev === 'landing' || prev === 'login' || prev === 'signup' ? 'aiAssistant' : prev,
+      prev === 'landing' || prev === 'login' || prev === 'signup' || prev === 'home'
+        ? 'aiAssistant'
+        : prev,
     );
   }, [isAuthenticated, initializing, redirectError]);
 
@@ -80,48 +82,46 @@ function AppContent() {
     });
   }, [currentView, isAuthenticated]);
 
-  const handleNavigate = (view: string) => {
-    setCurrentView(view);
-  };
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [drawerOpen]);
 
-  const navigateToSignUp = () => {
-    setCurrentView('signup');
-  };
-  const navigateToLogin = () => {
-    setCurrentView('login');
-  };
-
-  const navigateToHome = () => {
-    setCurrentView('home');
-  };
-  const navigateToCalendar = () => {
-    setCurrentView('calendar');
-  };
-
-  const navigateToPantryInventory = () => {
-    setCurrentView('pantryInventory');
-  };
-
-  const navigateToShoppingList = () => {
-    setCurrentView('shoppingList');
-  };
-  const navigateToRecipeManager = () => {
-    setCurrentView('recipeManager');
-  };
-  const navigateToSettings = () => {
-    setCurrentView('settings');
-  };
+  const navigateToSignUp = () => setCurrentView('signup');
+  const navigateToLogin = () => setCurrentView('login');
+  const navigateToCalendar = () => setCurrentView('calendar');
+  const navigateToPantryInventory = () => setCurrentView('pantryInventory');
+  const navigateToShoppingList = () => setCurrentView('shoppingList');
   const navigateToAiAssistant = (prompt?: string) => {
     if (typeof prompt === 'string' && prompt.trim()) {
       setPendingAiPrompt(prompt);
     }
     setCurrentView('aiAssistant');
   };
-  const askAiFromHome = () => {
-    navigateToAiAssistant(t('ai.emptyPrompts.cook'));
+
+  const openMenu = () => setDrawerOpen(true);
+  const closeMenu = () => setDrawerOpen(false);
+
+  const handleDrawerNavigate = (view: AppDrawerView) => {
+    setCurrentView(view);
   };
 
-  // Show loading screen while checking authentication
+  const handleSelectSession = (sessionId: string) => {
+    setPendingSessionId(sessionId);
+    setRequestNewChat(false);
+    setCurrentView('aiAssistant');
+  };
+
+  const handleNewChat = () => {
+    setRequestNewChat(true);
+    setPendingSessionId(null);
+    setCurrentView('aiAssistant');
+  };
+
   if (initializing) {
     return <Loading fullScreen />;
   }
@@ -130,14 +130,19 @@ function AppContent() {
   const showKeepAlive = (view: (typeof KEEP_ALIVE_VIEWS)[number]) =>
     isAuthenticated && visitedViews.has(view);
 
-  return <div className="w-full min-h-screen bg-linen">
-    {/* Desktop Sidebar — hidden on mobile */}
-    {!isGuestView && (
-      <Sidebar activeView={currentView} onNavigate={handleNavigate} />
-    )}
+  return (
+    <div className="w-full min-h-screen bg-linen">
+      {!isGuestView && (
+        <AppDrawer
+          open={drawerOpen}
+          activeView={currentView}
+          onClose={closeMenu}
+          onNavigate={handleDrawerNavigate}
+          onSelectSession={handleSelectSession}
+          onNewChat={handleNewChat}
+        />
+      )}
 
-    {/* Main content area — offset for sidebar on desktop */}
-    <div className={!isGuestView ? 'lg:pl-60' : ''}>
       {currentView === 'landing' && (
         <MarketingLanding onGetStarted={navigateToSignUp} onLogin={navigateToLogin} />
       )}
@@ -146,20 +151,6 @@ function AppContent() {
           onLoginSuccess={navigateToAiAssistant}
           onSignUp={navigateToSignUp}
         />
-      )}
-      {/* Keep visited tabs mounted so switching back is instant (no remount/refetch flash). */}
-      {showKeepAlive('home') && (
-        <div className={currentView === 'home' ? undefined : 'hidden'} aria-hidden={currentView !== 'home'}>
-          <Home
-            onLogin={navigateToLogin}
-            onCookWithWhatIHave={askAiFromHome}
-            onViewCalendar={navigateToCalendar}
-            onPantryInventory={navigateToPantryInventory}
-            onShoppingList={navigateToShoppingList}
-            onRecipeManager={navigateToRecipeManager}
-            onSettings={navigateToSettings}
-          />
-        </div>
       )}
       {showKeepAlive('aiAssistant') && (
         <div
@@ -170,7 +161,13 @@ function AppContent() {
             isActive={currentView === 'aiAssistant'}
             pendingPrompt={pendingAiPrompt}
             onPendingPromptConsumed={() => setPendingAiPrompt(null)}
-            onBack={navigateToHome}
+            requestedSessionId={pendingSessionId}
+            requestNewChat={requestNewChat}
+            onSessionRequestConsumed={() => {
+              setPendingSessionId(null);
+              setRequestNewChat(false);
+            }}
+            onOpenMenu={openMenu}
             onViewRecipe={(recipeId) => {
               setSelectedRecipeId(recipeId);
               setCurrentView('recipeManager');
@@ -183,7 +180,10 @@ function AppContent() {
       )}
       {showKeepAlive('calendar') && (
         <div className={currentView === 'calendar' ? undefined : 'hidden'} aria-hidden={currentView !== 'calendar'}>
-          <Calendar onBack={navigateToHome} onAskAi={navigateToAiAssistant} />
+          <Calendar
+            onBack={navigateToAiAssistant}
+            onOpenMenu={openMenu}
+          />
         </div>
       )}
       {showKeepAlive('recipeManager') && (
@@ -192,8 +192,8 @@ function AppContent() {
           aria-hidden={currentView !== 'recipeManager'}
         >
           <RecipeManager
-            onBack={navigateToHome}
-            onAskAi={navigateToAiAssistant}
+            onBack={navigateToAiAssistant}
+            onOpenMenu={openMenu}
             selectedRecipeId={selectedRecipeId}
             onSelectedRecipeHandled={() => setSelectedRecipeId(null)}
           />
@@ -202,7 +202,18 @@ function AppContent() {
       {showKeepAlive('settings') && (
         <div className={currentView === 'settings' ? undefined : 'hidden'} aria-hidden={currentView !== 'settings'}>
           <Settings
-            onBack={navigateToHome}
+            onBack={navigateToAiAssistant}
+            onOpenMenu={openMenu}
+          />
+        </div>
+      )}
+      {showKeepAlive('subscription') && (
+        <div
+          className={currentView === 'subscription' ? undefined : 'hidden'}
+          aria-hidden={currentView !== 'subscription'}
+        >
+          <SubscriptionView
+            onOpenMenu={openMenu}
             checkoutSuccess={subscriptionNotice === 'success'}
             checkoutCancelled={subscriptionNotice === 'cancelled'}
           />
@@ -213,7 +224,10 @@ function AppContent() {
           className={currentView === 'pantryInventory' ? undefined : 'hidden'}
           aria-hidden={currentView !== 'pantryInventory'}
         >
-          <PantryInventory onBack={navigateToHome} onAskAi={navigateToAiAssistant} />
+          <PantryInventory
+            onBack={navigateToAiAssistant}
+            onOpenMenu={openMenu}
+          />
         </div>
       )}
       {showKeepAlive('shoppingList') && (
@@ -221,20 +235,19 @@ function AppContent() {
           className={currentView === 'shoppingList' ? undefined : 'hidden'}
           aria-hidden={currentView !== 'shoppingList'}
         >
-          <ShoppingList onBack={navigateToHome} onAskAi={navigateToAiAssistant} />
+          <ShoppingList
+            onBack={navigateToAiAssistant}
+            onOpenMenu={openMenu}
+          />
         </div>
       )}
       {currentView === 'signup' && (
         <SignUp onSignUpSuccess={navigateToAiAssistant} onLogin={navigateToLogin} />
       )}
     </div>
-
-    {/* Mobile BottomNav — hidden on desktop */}
-    {!isGuestView && (
-      <BottomNav activeView={currentView} onNavigate={handleNavigate} />
-    )}
-  </div>;
+  );
 }
+
 export function App() {
   return (
     <GoogleOAuthProvider clientId={googleClientId}>

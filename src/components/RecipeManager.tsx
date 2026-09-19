@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftIcon, PlusIcon, TrashIcon, SearchIcon, CalendarIcon, EditIcon, XIcon, ImageIcon, FolderIcon, ChevronRightIcon, HomeIcon, MoreVerticalIcon, FolderPlusIcon, PencilIcon, AlertCircleIcon } from 'lucide-react';
+import { ArrowLeftIcon, PlusIcon, TrashIcon, SearchIcon, EditIcon, XIcon, ImageIcon, FolderIcon, ChevronRightIcon, HomeIcon, MoreVerticalIcon, FolderPlusIcon, PencilIcon, AlertCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { IngredientEntry, Folder, Recipe } from '../api/types';
 import { ImageUploadApi } from '../api/ImageUploader';
@@ -8,19 +8,19 @@ import { compressImage } from '../utils/imageHelper';
 import { Loading } from './Loading';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
 import { fromBase, resolveIngredientUnits, type MeasurementSystem } from '../utils/units';
-import { AskAiEmptyCta } from './AskAiEmptyCta';
+import { AppHeader } from './AppHeader';
 
 
 interface RecipeManagerProps {
   onBack: () => void;
-  onAskAi?: (prompt: string) => void;
+  onOpenMenu?: () => void;
   selectedRecipeId?: string | null;
   onSelectedRecipeHandled?: () => void;
 }
 
 export function RecipeManager({
   onBack,
-  onAskAi,
+  onOpenMenu,
   selectedRecipeId,
   onSelectedRecipeHandled,
 }: RecipeManagerProps) {
@@ -436,18 +436,13 @@ export function RecipeManager({
   };
 
   return <div className="flex flex-col w-full min-h-screen bg-linen">
-    <div className="flex-1 overflow-y-auto pb-20 lg:pb-6">
-      {/* Page title */}
-      <div className="max-w-6xl mx-auto px-6 lg:px-8 py-6 flex items-center gap-4">
-        <button
-          onClick={handleNavigateBack}
-          className={`p-2 rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors ${currentFolder || selectedRecipe || showAddRecipe ? '' : 'lg:hidden'}`}
-          aria-label={t('common.back')}
-        >
-          <ArrowLeftIcon size={22} />
-        </button>
-        <h1 className="page-title animate-fade-in">{t('recipes.title')}</h1>
-      </div>
+    <AppHeader
+      title={t('recipes.title')}
+      onOpenMenu={currentFolder || selectedRecipe || showAddRecipe ? undefined : onOpenMenu}
+      showBack={Boolean(currentFolder || selectedRecipe || showAddRecipe)}
+      onBack={handleNavigateBack}
+    />
+    <div className="flex-1 overflow-y-auto">
       {/* Main Content */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 lg:px-8 py-6">
         {!showAddRecipe && !selectedRecipe && recipesLoading && recipes.length === 0 ? <Loading compact /> : !showAddRecipe && !selectedRecipe ? <>
@@ -577,12 +572,6 @@ export function RecipeManager({
                   <p className="text-muted text-sm mt-1">
                     {t('common.tryDifferentSearch')}
                   </p>
-                ) : onAskAi ? (
-                  <AskAiEmptyCta
-                    hint={t('ai.emptyHint')}
-                    label={t('ai.emptyCta.recipes')}
-                    onClick={() => onAskAi(t('ai.emptyPrompts.recipes'))}
-                  />
                 ) : null}
               </div> : <ul className="divide-y divide-line">
                 {filteredRecipes.map(recipe => <li key={recipe.id} className="p-4">

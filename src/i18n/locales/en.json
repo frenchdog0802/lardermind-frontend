@@ -25,13 +25,21 @@
   },
   "nav": {
     "home": "Home",
-    "aiChat": "AI Chat",
+    "aiChat": "Chat",
     "calendar": "Calendar",
     "pantry": "Pantry",
+    "inventory": "Inventory",
     "shoppingList": "Shopping List",
     "shopping": "Shopping",
     "recipes": "Recipes",
     "settings": "Settings",
+    "subscription": "Subscription",
+    "recents": "Recents",
+    "newChat": "New chat",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "recentsEmpty": "No recent chats yet",
+    "recentsLoadError": "Couldn't load chats",
     "tagline": "An AI assistant that plans your meals from what's in your pantry."
   },
   "mealTypes": {
@@ -223,6 +231,9 @@
     "mealSuggestions": "Meal suggestions",
     "placeholder": "Ask about cooking, meal plans, or recipes...",
     "welcome": "Hi! Tell me what you need — import a recipe URL, plan your week, update your pantry, or ask what you can cook. I'll handle it and show you what changed.",
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
     "newChat": "New chat",
     "emptyHint": "Skip the forms — just tell the AI what you need.",
     "emptyCta": {

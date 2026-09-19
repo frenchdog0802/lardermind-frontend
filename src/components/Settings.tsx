@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/authContext';
 import { usePantry } from '../contexts/pantryContext';
-import { ArrowLeftIcon, UserIcon, PaletteIcon, SaveIcon, LanguagesIcon, CrownIcon } from 'lucide-react';
+import { UserIcon, PaletteIcon, SaveIcon, LanguagesIcon, CrownIcon } from 'lucide-react';
 import { SubscriptionPanel } from './SubscriptionPanel';
+import { AppHeader } from './AppHeader';
 import { userPreferencesApi } from '../api/userPreferences';
 import type { UserPreferences } from '../api/types';
 import { AppLanguage, persistLanguage } from '../i18n';
 
 interface SettingsProps {
   onBack: () => void;
+  onOpenMenu?: () => void;
   checkoutSuccess?: boolean;
   checkoutCancelled?: boolean;
 }
@@ -35,7 +37,7 @@ function textToList(value: string): string[] {
     .filter(Boolean);
 }
 
-export function Settings({ onBack, checkoutSuccess = false, checkoutCancelled = false }: SettingsProps) {
+export function Settings({ onBack: _onBack, onOpenMenu, checkoutSuccess = false, checkoutCancelled = false }: SettingsProps) {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
   const { userSettings, updateUserSettings } = usePantry();
@@ -140,19 +142,9 @@ export function Settings({ onBack, checkoutSuccess = false, checkoutCancelled = 
 
   return (
     <div className="flex flex-col w-full min-h-screen bg-linen">
-      <div className="flex-1 overflow-y-auto pb-20 lg:pb-6">
-        <div className="max-w-3xl mx-auto px-6 lg:px-8 py-6 flex items-center gap-4">
-          <button
-            onClick={onBack}
-            className="lg:hidden p-2 rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors"
-            aria-label={t('common.back')}
-          >
-            <ArrowLeftIcon size={22} />
-          </button>
-          <h1 className="page-title animate-fade-in">{t('settings.title')}</h1>
-        </div>
-
-        <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 pb-6">
+      <AppHeader title={t('settings.title')} onOpenMenu={onOpenMenu} />
+      <div className="flex-1 overflow-y-auto">
+        <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 py-6">
           <div className="border-b border-line">
             <div className="flex">
               <button

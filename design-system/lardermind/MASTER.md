@@ -76,9 +76,10 @@ Defined in `src/index.css`:
 ## Layout Patterns
 
 ### App chrome
-- **Desktop:** Fixed sidebar (`Sidebar.tsx`) — LarderMind wordmark, sage active nav.
-- **Mobile:** Bottom tab bar (`BottomNav.tsx`) — herb active color on linen bar.
-- **No** full-width orange/red gradient headers on authenticated screens. Use quiet `.page-title` in content column.
+- **Authenticated:** Left **overlay drawer** (`AppDrawer.tsx`) — LarderMind wordmark, primary destinations, Recents, footer (New chat / Settings / Subscription). Hamburger in `AppHeader` opens it.
+- **Default home:** Chat (`AICookingAssistant`) — full-height agent transcript + sticky composer.
+- **Do not** use desktop Sidebar + mobile BottomNav split (removed).
+- **No** full-width orange/red gradient headers on authenticated screens. Quiet `AppHeader` / `.page-title` in content.
 
 ### Home (first viewport)
 1. LarderMind brand (Fraunces)

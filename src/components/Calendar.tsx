@@ -1,19 +1,19 @@
 import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, PackageIcon, ImageIcon, PlusIcon, TrashIcon, XIcon, AlertCircleIcon, SearchIcon, ChevronDownIcon, CalendarIcon, ListIcon, MoreHorizontalIcon, ChevronUpIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, CheckIcon, PackageIcon, ImageIcon, PlusIcon, TrashIcon, XIcon, AlertCircleIcon, SearchIcon, ChevronDownIcon, CalendarIcon, ListIcon, MoreHorizontalIcon, ChevronUpIcon } from 'lucide-react';
 import { usePantry, normalizeRecipe } from '../contexts/pantryContext';
 import { MealPlan, Recipe } from '../api/types';
 import { recipeApi } from '../api/recipes';
 import { Loading } from './Loading';
-import { AskAiEmptyCta } from './AskAiEmptyCta';
+import { AppHeader } from './AppHeader';
 import { dateLocale } from '../i18n';
 interface CalendarProps {
   onBack: () => void;
-  onAskAi?: (prompt: string) => void;
+  onOpenMenu?: () => void;
 }
 export function Calendar({
-  onBack,
-  onAskAi,
+  onBack: _onBack,
+  onOpenMenu,
 }: CalendarProps) {
   const { t, i18n } = useTranslation();
   const {
@@ -472,21 +472,23 @@ export function Calendar({
   }, [currentWeekStart]);
 
   return <div className="flex flex-col w-full min-h-screen bg-linen">
-    <div className="flex-1 overflow-y-auto pb-20 lg:pb-6">
-      {/* Page title */}
-      <div className="max-w-6xl mx-auto px-6 lg:px-8 py-6 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="lg:hidden p-2 rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors" aria-label={t('common.back')}>
-            <ArrowLeftIcon size={20} />
-          </button>
-          <h1 className="page-title animate-fade-in">{t('calendar.title')}</h1>
-        </div>
-        <button onClick={() => handleOpenAddRecipe(new Date())} className="p-2 rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors" aria-label={t('calendar.addRecipe')}>
+    <AppHeader
+      title={t('calendar.title')}
+      onOpenMenu={onOpenMenu}
+      rightSlot={
+        <button
+          type="button"
+          onClick={() => handleOpenAddRecipe(new Date())}
+          className="w-10 h-10 flex items-center justify-center rounded-full text-ink hover:bg-sage/50 transition-colors"
+          aria-label={t('calendar.addRecipe')}
+        >
           <PlusIcon size={20} />
         </button>
-      </div>
+      }
+    />
+    <div className="flex-1 overflow-y-auto">
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto max-w-6xl mx-auto w-full px-6 lg:px-8 pb-4">
+      <main className="flex-1 overflow-y-auto max-w-6xl mx-auto w-full px-6 lg:px-8 py-4 pb-6">
         {pendingMeals.length > 0 && (
           <div className="mb-3 rounded-xl border border-herb/30 bg-sage/40 p-3 space-y-2">
             <p className="text-sm font-medium text-ink">
@@ -783,17 +785,9 @@ export function Calendar({
             <p className="text-muted">
               {t('calendar.noMealsForDate')}
             </p>
-            {onAskAi ? (
-              <AskAiEmptyCta
-                hint={t('ai.emptyHint')}
-                label={t('ai.emptyCta.calendar')}
-                onClick={() => onAskAi(t('ai.emptyPrompts.calendar'))}
-              />
-            ) : (
-              <p className="text-muted text-sm mt-1">
-                Cook something delicious today!
-              </p>
-            )}
+            <p className="text-muted text-sm mt-1">
+              Cook something delicious today!
+            </p>
           </div>}
         </div>}
       </main>

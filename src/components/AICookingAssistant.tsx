@@ -1,11 +1,13 @@
 ﻿import { useEffect, useState, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftIcon, SendIcon, RefreshCwIcon, ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
+import { SendIcon, ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { chatApi, ChatResponse, ChatSession, HistoryMessage, PendingToolSummary } from '../api/chat';
 import { mealPlanApi } from '../api/mealPlan';
 import { RecipeSuggestion } from '../api/types';
 import ChatMessageContent from './ChatMessageContent';
+import { AppHeader } from './AppHeader';
+import { ChatEmptyState } from './ChatEmptyState';
 
 interface AICookingAssistantProps {
   /** When false, the view is hidden but stays mounted so streams keep running. */
@@ -13,7 +15,12 @@ interface AICookingAssistantProps {
   /** Prefill the composer when navigating from an empty-state CTA. */
   pendingPrompt?: string | null;
   onPendingPromptConsumed?: () => void;
-  onBack: () => void;
+  /** Switch to this session when set from the app drawer. */
+  requestedSessionId?: string | null;
+  /** Create / focus a blank chat when true. */
+  requestNewChat?: boolean;
+  onSessionRequestConsumed?: () => void;
+  onOpenMenu: () => void;
   onViewRecipe?: (recipeId: string) => void;
   onViewShoppingList?: () => void;
   onViewCalendar?: () => void;
@@ -79,7 +86,10 @@ export function AICookingAssistant({
   isActive = true,
   pendingPrompt = null,
   onPendingPromptConsumed,
-  onBack,
+  requestedSessionId = null,
+  requestNewChat = false,
+  onSessionRequestConsumed,
+  onOpenMenu,
   onViewRecipe,
   onViewShoppingList,
   onViewCalendar,
@@ -99,7 +109,7 @@ export function AICookingAssistant({
   const [suggestedRecipes, setSuggestedRecipes] = useState<RecipeSuggestion[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeSuggestion | null>(null);
   const [addingToMenuRecipeId, setAddingToMenuRecipeId] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{
     sessionId: string;
@@ -206,6 +216,27 @@ export function AICookingAssistant({
     onPendingPromptConsumed?.();
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [isActive, pendingPrompt, onPendingPromptConsumed]);
+
+  // Drawer Recents / New chat
+  useEffect(() => {
+    if (!isActive) return;
+    if (requestNewChat) {
+      void (async () => {
+        await handleNewSession();
+        onSessionRequestConsumed?.();
+      })();
+      return;
+    }
+    if (requestedSessionId) {
+      void (async () => {
+        await handleSwitchSession(requestedSessionId);
+        onSessionRequestConsumed?.();
+      })();
+    }
+    // handleSwitchSession / handleNewSession are stable enough for this shell; avoid re-firing on identity churn
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, requestedSessionId, requestNewChat]);
+
   const mapResponseToMessage = (response: ChatResponse): Message => {
     const cardTypes: MessageType[] = [
       'recipe_created', 'recipe_imported', 'recipe_updated',
@@ -232,7 +263,7 @@ export function AICookingAssistant({
       tasks.push(fetchAllMealPlans());
     }
     if (['pantry_updated', 'meal_suggestions', 'multi_action', 'action_result'].includes(type)) {
-      tasks.push(fetchAllPantryItems());
+      tasks.push(Promise.resolve(fetchAllPantryItems()));
     }
     if (['shopping_list_updated', 'meal_plan_updated', 'multi_action', 'action_result'].includes(type)) {
       tasks.push(fetchAllShoppingListItems());
@@ -325,11 +356,11 @@ export function AICookingAssistant({
           >
             Edit Recipe
           </button>
-          <button
-            onClick={() => message.cardData?.recipeId && handleAddCreatedRecipeToMenu(message.cardData.recipeId)}
-            disabled={addingToMenuRecipeId === message.cardData?.recipeId}
-            className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm disabled:opacity-60"
-          >
+              <button
+                onClick={() => message.cardData?.recipeId && handleAddCreatedRecipeToMenu(message.cardData.recipeId)}
+                disabled={addingToMenuRecipeId === message.cardData?.recipeId}
+                className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-60"
+              >
             Add to today's dinner
           </button>
         </div>
@@ -524,19 +555,6 @@ export function AICookingAssistant({
     // Generate response
     generateResponse(inputValue);
   };
-  // Handle clearing the chat (UI + server history for active session)
-  const handleClearChat = async () => {
-    try {
-      await chatApi.clearHistory(activeSessionId ?? undefined);
-    } catch (error) {
-      console.error('Failed to clear chat history', error);
-    }
-    setPendingApproval(null);
-    setMessages([]);
-    setSuggestedRecipes([]);
-    setSelectedRecipe(null);
-    setInputValue('');
-  };
   // Handle adding a recipe to the cooking app
   const handleAddToRecipes = (recipe: RecipeSuggestion) => {
     // Format recipe for the cooking app
@@ -573,58 +591,19 @@ export function AICookingAssistant({
       minute: '2-digit'
     });
   };
-  return <div className="flex flex-col w-full min-h-screen bg-linen">
-    <div className="flex-1 overflow-y-auto pb-20 lg:pb-6">
-      {/* Page title */}
-      <div className="max-w-2xl mx-auto px-6 lg:px-8 py-6 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="lg:hidden p-2 rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors" aria-label="Go back">
-            <ArrowLeftIcon size={22} />
-          </button>
-          <h1 className="page-title animate-fade-in">{t('ai.title')}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleNewSession}
-            disabled={isTyping}
-            className="px-3 py-1.5 text-sm rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors disabled:opacity-50"
-            title="New chat"
-            aria-label="Start a new chat"
-          >
-            {t('ai.newChat')}
-          </button>
-          <button
-            onClick={handleClearChat}
-            disabled={isTyping}
-            className="px-3 py-1.5 text-sm rounded-lg text-muted hover:text-ink hover:bg-sage/50 transition-colors disabled:opacity-50"
-            title="Clear chat"
-            aria-label="Clear current chat"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-      {sessions.length > 0 && (
-        <div className="max-w-2xl mx-auto px-6 lg:px-8 pb-2 flex gap-2 overflow-x-auto">
-          {sessions.map((session) => (
-            <button
-              key={session.id}
-              type="button"
-              disabled={isTyping}
-              onClick={() => void handleSwitchSession(session.id)}
-              className={`shrink-0 px-3 py-1.5 text-xs rounded-full border transition-colors disabled:opacity-50 ${
-                session.id === activeSessionId
-                  ? 'bg-herb text-white border-herb'
-                  : 'bg-surface text-muted border-line hover:text-ink'
-              }`}
-            >
-              {session.title || 'Chat'}
-            </button>
-          ))}
-        </div>
-      )}
+
+  return (
+    <div className="flex flex-col w-full h-[100dvh] min-h-screen bg-linen">
+      <AppHeader
+        title={t('nav.aiChat')}
+        onOpenMenu={onOpenMenu}
+        onNewChat={() => {
+          if (!isTyping) void handleNewSession();
+        }}
+      />
+
       {pendingApproval && (
-        <div className="max-w-2xl mx-auto px-6 lg:px-8 pb-2">
+        <div className="shrink-0 max-w-3xl mx-auto w-full px-4 pt-3">
           <div className="rounded-xl border border-line bg-surface p-4">
             <p className="text-sm font-medium text-ink">Approve these changes?</p>
             <ul className="mt-2 space-y-1 text-xs text-muted">
@@ -656,68 +635,78 @@ export function AICookingAssistant({
           </div>
         </div>
       )}
-      {/* Main Content */}
-      <main className="flex-1 max-w-2xl mx-auto w-full px-6 lg:px-8 py-6 flex flex-col">
-        {selectedRecipe /* Recipe Detail View */ ? <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden flex-1">
-          <div className="p-4 border-b border-line bg-linen flex justify-between items-center">
-            <h2 className="font-semibold text-ink">
-              {selectedRecipe.mealName}
-            </h2>
-            <button onClick={() => setSelectedRecipe(null)} className="p-1 rounded-full hover:bg-sage/60" aria-label="Close">
-              <XIcon size={18} className="text-muted" />
-            </button>
-          </div>
-          <div className="p-6">
-            {selectedRecipe.image && <div className="rounded-xl overflow-hidden h-40 mb-6">
-              <img src={selectedRecipe.image} alt={selectedRecipe.mealName} className="w-full h-full object-cover" />
-            </div>}
-            <div className="mb-6">
-              <h3 className="font-medium text-ink mb-2">{t('ai.ingredients')}</h3>
-              <ul className="space-y-2">
-                {selectedRecipe.ingredients.map((ingredient: any, index: number) => <li key={index} className="flex items-center">
-                  <div className="w-2 h-2 rounded-full bg-herb mr-2"></div>
-                  <span>
-                    {ingredient.quantity} {ingredient.unit}{' '}
-                    {ingredient.name}
-                  </span>
-                </li>)}
-              </ul>
-            </div>
-            <div className="mb-6">
-              <h3 className="font-medium text-ink mb-2">{t('ai.instructions')}</h3>
-              <ol className="space-y-3">
-                {selectedRecipe.instructions.map((step: string, index: number) => <li key={index} className="flex">
-                  <div className="bg-sage rounded-full w-6 h-6 flex items-center justify-center text-herb-deep font-medium mr-3 flex-shrink-0 mt-0.5">
-                    {index + 1}
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-4">
+          {selectedRecipe ? (
+            <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
+              <div className="p-4 border-b border-line bg-linen flex justify-between items-center">
+                <h2 className="font-semibold text-ink">{selectedRecipe.mealName}</h2>
+                <button onClick={() => setSelectedRecipe(null)} className="p-1 rounded-full hover:bg-sage/60" aria-label="Close">
+                  <XIcon size={18} className="text-muted" />
+                </button>
+              </div>
+              <div className="p-6">
+                {selectedRecipe.image && (
+                  <div className="rounded-xl overflow-hidden h-40 mb-6">
+                    <img src={selectedRecipe.image} alt={selectedRecipe.mealName} className="w-full h-full object-cover" />
                   </div>
-                  <p className="text-ink">{step}</p>
-                </li>)}
-              </ol>
-            </div>
-            <div className="flex gap-2 pt-4">
-              <button onClick={() => setSelectedRecipe(null)} className="w-1/2 bg-sage/40 text-ink py-2 rounded-lg">
-                Back
-              </button>
-              <button onClick={() => handleAddToRecipes(selectedRecipe)} className="w-1/2 bg-blue-600 text-white py-2 rounded-lg flex items-center justify-center">
-                <PlusCircleIcon size={18} className="mr-1" />
-                Add to Recipes
-              </button>
-            </div>
-          </div>
-        </div> /* Chat View */ : <>
-          <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden flex-1 flex flex-col">
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {messages.length === 0 ? (
-                <div className="h-full min-h-[12rem] flex items-center justify-center px-4">
-                  <p className="text-center text-muted text-sm sm:text-base max-w-md">
-                    {t('ai.welcome')}
-                  </p>
+                )}
+                <div className="mb-6">
+                  <h3 className="font-medium text-ink mb-2">{t('ai.ingredients')}</h3>
+                  <ul className="space-y-2">
+                    {selectedRecipe.ingredients.map((ingredient: { quantity?: string | number; unit?: string; name: string }, index: number) => (
+                      <li key={index} className="flex items-center">
+                        <div className="w-2 h-2 rounded-full bg-herb mr-2" />
+                        <span>
+                          {ingredient.quantity} {ingredient.unit} {ingredient.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              ) : (
-              <div className="space-y-6">
-                {messages.map(message => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] lg:max-w-[70%] rounded-2xl p-3 lg:p-4 ${message.role === 'user' ? 'bg-herb text-white' : message.type === 'error' ? 'bg-sage/50 text-herb-deep border border-line' : 'bg-sage/40 text-ink'}`}>
+                <div className="mb-6">
+                  <h3 className="font-medium text-ink mb-2">{t('ai.instructions')}</h3>
+                  <ol className="space-y-3">
+                    {selectedRecipe.instructions.map((step: string, index: number) => (
+                      <li key={index} className="flex">
+                        <div className="bg-sage rounded-full w-6 h-6 flex items-center justify-center text-herb-deep font-medium mr-3 flex-shrink-0 mt-0.5">
+                          {index + 1}
+                        </div>
+                        <p className="text-ink">{step}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <button onClick={() => setSelectedRecipe(null)} className="w-1/2 bg-sage/40 text-ink py-2 rounded-lg">
+                    Back
+                  </button>
+                  <button
+                    onClick={() => handleAddToRecipes(selectedRecipe)}
+                    className="w-1/2 bg-herb text-white py-2 rounded-lg flex items-center justify-center"
+                  >
+                    <PlusCircleIcon size={18} className="mr-1" />
+                    Add to Recipes
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
+            <ChatEmptyState />
+          ) : (
+            <div className="space-y-6 pb-4">
+              {messages.map((message) => (
+                <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 sm:p-4 ${
+                      message.role === 'user'
+                        ? 'bg-herb text-white'
+                        : message.type === 'error'
+                          ? 'bg-sage/50 text-herb-deep border border-line'
+                          : 'bg-sage/40 text-ink'
+                    }`}
+                  >
                     <div>
                       {message.streaming && !message.content ? (
                         <div className="space-y-2">
@@ -867,109 +856,100 @@ export function AICookingAssistant({
                         </ul>
                       </div>
                     )}
-                    <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-white/70' : message.type === 'error' ? 'text-herb' : 'text-muted'}`}>
+                    <div
+                      className={`text-xs mt-1 ${
+                        message.role === 'user'
+                          ? 'text-white/70'
+                          : message.type === 'error'
+                            ? 'text-herb'
+                            : 'text-muted'
+                      }`}
+                    >
                       {formatTimestamp(message.timestamp)}
                     </div>
                   </div>
-                </div>)}
-                {/* Show suggested recipes if available */}
-                {suggestedRecipes.length > 0 && <div className="flex justify-start">
+                </div>
+              ))}
+              {suggestedRecipes.length > 0 && (
+                <div className="flex justify-start">
                   <div className="max-w-[80%] bg-surface border border-line rounded-2xl p-4 shadow-sm">
-                    <h3 className="font-medium text-ink mb-2">
-                      Suggested Recipes
-                    </h3>
+                    <h3 className="font-medium text-ink mb-2">Suggested Recipes</h3>
                     <div className="space-y-3">
-                      {suggestedRecipes.map(recipe => <div key={recipe.id} className="border border-line rounded-lg p-3 hover:bg-linen">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-medium text-ink">
-                            {recipe.mealName}
-                          </h4>
-                          <div className="flex space-x-1">
-                            <button onClick={() => setSelectedRecipe(recipe)} className="p-1 rounded-full hover:bg-sage/60 text-muted" title="View recipe">
+                      {suggestedRecipes.map((recipe) => (
+                        <div key={recipe.id} className="border border-line rounded-lg p-3 hover:bg-linen">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-medium text-ink">{recipe.mealName}</h4>
+                            <button
+                              onClick={() => setSelectedRecipe(recipe)}
+                              className="p-1 rounded-full hover:bg-sage/60 text-muted"
+                              title="View recipe"
+                            >
                               <ChevronRightIcon size={16} />
                             </button>
                           </div>
+                          {recipe.missingIngredient && (
+                            <div className="flex items-center text-muted text-xs">
+                              <ShoppingCartIcon size={12} className="mr-1" />
+                              <span>Missing: {recipe.missingIngredient.name}</span>
+                            </div>
+                          )}
                         </div>
-                        {recipe.missingIngredient && <div className="flex items-center text-muted text-xs">
-                          <ShoppingCartIcon size={12} className="mr-1" />
-                          <span>
-                            Missing: {recipe.missingIngredient.name}
-                          </span>
-                        </div>}
-                      </div>)}
+                      ))}
                     </div>
                   </div>
-                </div>}
-                <div ref={messagesEndRef} />
-              </div>
-              )}
-            </div>
-            {/* Input Area — ChatGPT / Claude-style composer */}
-            <div className="border-t border-line bg-surface px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
-              <div className="mb-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:justify-center sm:overflow-visible">
-                {suggestedPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => setInputValue(prompt)}
-                    className="shrink-0 text-sm sm:text-xs bg-sage/40 hover:bg-sage/60 text-ink px-3.5 py-2 sm:py-1 rounded-full"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-end gap-2">
-                <button
-                  type="button"
-                  onClick={handleClearChat}
-                  disabled={isTyping}
-                  className="mb-1.5 hidden sm:inline-flex p-2.5 text-muted hover:text-ink hover:bg-sage/50 rounded-full disabled:opacity-50"
-                  title="New chat"
-                  aria-label="Start a new chat"
-                >
-                  <RefreshCwIcon size={20} />
-                </button>
-                <div className="relative flex-1 flex items-end rounded-[28px] border border-line bg-linen/60 focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-transparent min-h-[56px]">
-                  <textarea
-                    ref={inputRef}
-                    rows={2}
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    placeholder={t('ai.placeholder')}
-                    className="w-full resize-none overflow-y-auto bg-transparent py-3.5 pl-4 pr-14 text-base leading-snug text-ink placeholder:text-muted focus:outline-none disabled:opacity-60 min-h-[56px] max-h-60"
-                    disabled={isTyping}
-                    aria-label={t('ai.placeholder')}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSendMessage}
-                    disabled={!inputValue.trim() || isTyping}
-                    aria-label="Send message"
-                    className="absolute right-2 bottom-2 flex h-11 w-11 items-center justify-center rounded-full bg-herb text-white hover:bg-herb-deep disabled:bg-sage/60 disabled:text-muted transition-colors"
-                  >
-                    <SendIcon size={20} />
-                  </button>
                 </div>
-              </div>
-              <div className="mt-2 flex sm:hidden justify-center">
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {!selectedRecipe && (
+        <div className="shrink-0 border-t border-line bg-linen px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
+          <div className="max-w-3xl mx-auto w-full">
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:justify-center sm:overflow-visible">
+              {suggestedPrompts.map((prompt) => (
                 <button
+                  key={prompt}
                   type="button"
-                  onClick={handleClearChat}
-                  disabled={isTyping}
-                  className="text-xs text-muted hover:text-ink disabled:opacity-50 px-2 py-1"
+                  onClick={() => setInputValue(prompt)}
+                  className="shrink-0 text-sm sm:text-xs bg-sage/40 hover:bg-sage/60 text-ink px-3.5 py-2 sm:py-1 rounded-full"
                 >
-                  New chat
+                  {prompt}
                 </button>
-              </div>
+              ))}
+            </div>
+            <div className="relative flex items-end rounded-[28px] border border-line bg-surface focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-transparent min-h-[56px]">
+              <textarea
+                ref={inputRef}
+                rows={2}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder={t('ai.placeholder')}
+                className="w-full resize-none overflow-y-auto bg-transparent py-3.5 pl-4 pr-14 text-base leading-snug text-ink placeholder:text-muted focus:outline-none disabled:opacity-60 min-h-[56px] max-h-60"
+                disabled={isTyping}
+                aria-label={t('ai.placeholder')}
+              />
+              <button
+                type="button"
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isTyping}
+                aria-label="Send message"
+                className="absolute right-2 bottom-2 flex h-11 w-11 items-center justify-center rounded-full bg-herb text-white hover:bg-herb-deep disabled:bg-sage/60 disabled:text-muted transition-colors"
+              >
+                <SendIcon size={20} />
+              </button>
             </div>
           </div>
-        </>}
-      </main>
-    </div></div>;
+        </div>
+      )}
+    </div>
+  );
 }
