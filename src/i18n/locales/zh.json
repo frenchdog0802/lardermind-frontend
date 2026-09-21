@@ -229,8 +229,8 @@
     "instructions": "作法",
     "preferencesSaved": "偏好已儲存",
     "mealSuggestions": "餐點建議",
-    "placeholder": "詢問烹飪、菜單或食譜...",
-    "welcome": "嗨！告訴我你需要什麼 — 匯入食譜網址、規劃本週菜單、更新冰箱庫存，或問我能煮什麼。我會幫你處理並顯示變更。",
+    "placeholder": "問我任何事...",
+    "welcome": "點選下方建議，或直接輸入你想做的事。",
     "greetingMorning": "早安",
     "greetingAfternoon": "午安",
     "greetingEvening": "晚安",
@@ -252,12 +252,10 @@
     "suggestedPrompts": [
       "我現有的食材可以煮什麼？",
       "幫我規劃這週剩下的晚餐",
-      "從網址匯入一道食譜",
-      "從 YouTube 或 Instagram 連結匯入食譜",
-      "把雞胸肉、米和花椰菜加入冰箱",
-      "整理我的冰箱庫存"
+      "從網址匯入食譜（網站、YouTube 或 Instagram）",
+      "把雞胸肉、米和花椰菜加入冰箱"
     ],
-    "demoWelcome": "嗨！告訴我你需要什麼 — 用冰箱裡的東西規劃晚餐、匯入食譜，或問我能煮什麼。試試下面的提示。",
+    "demoWelcome": "試試下方提示，或自己輸入。",
     "demoSuggestedPrompts": [
       "我現有的食材可以煮什麼？",
       "幫我規劃這週剩下的晚餐",

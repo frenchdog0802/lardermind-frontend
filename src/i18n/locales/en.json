@@ -229,8 +229,8 @@
     "instructions": "Instructions",
     "preferencesSaved": "Preferences saved",
     "mealSuggestions": "Meal suggestions",
-    "placeholder": "Ask about cooking, meal plans, or recipes...",
-    "welcome": "Hi! Tell me what you need — import a recipe URL, plan your week, update your pantry, or ask what you can cook. I'll handle it and show you what changed.",
+    "placeholder": "Ask anything...",
+    "welcome": "Pick a suggestion below, or just type what you need.",
     "greetingMorning": "Good morning",
     "greetingAfternoon": "Good afternoon",
     "greetingEvening": "Good evening",
@@ -252,12 +252,10 @@
     "suggestedPrompts": [
       "What can I cook with what I have?",
       "Plan dinners for the rest of this week",
-      "Import a recipe from a URL",
-      "Import a recipe from a YouTube or Instagram link",
-      "Add chicken, rice, and broccoli to my pantry",
-      "Organize my pantry"
+      "Import a recipe from a URL (website, YouTube, or Instagram)",
+      "Add chicken, rice, and broccoli to my pantry"
     ],
-    "demoWelcome": "Hi! Tell me what you need — plan dinner from your pantry, import a recipe, or ask what you can cook. Try a prompt below.",
+    "demoWelcome": "Try a prompt below, or type your own.",
     "demoSuggestedPrompts": [
       "What can I cook with what I have?",
       "Plan dinners for the rest of this week",

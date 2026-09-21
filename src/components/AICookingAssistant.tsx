@@ -693,7 +693,10 @@ export function AICookingAssistant({
               </div>
             </div>
           ) : messages.length === 0 ? (
-            <ChatEmptyState />
+            <ChatEmptyState
+              suggestedPrompts={suggestedPrompts}
+              onSelectPrompt={setInputValue}
+            />
           ) : (
             <div className="space-y-6 pb-4">
               {messages.map((message) => (
@@ -908,22 +911,10 @@ export function AICookingAssistant({
       {!selectedRecipe && (
         <div className="shrink-0 border-t border-line bg-linen px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
           <div className="max-w-3xl mx-auto w-full">
-            <div className="mb-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:justify-center sm:overflow-visible">
-              {suggestedPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => setInputValue(prompt)}
-                  className="shrink-0 text-sm sm:text-xs bg-sage/40 hover:bg-sage/60 text-ink px-3.5 py-2 sm:py-1 rounded-full"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-            <div className="relative flex items-end rounded-[28px] border border-line bg-surface focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-transparent min-h-[56px]">
+            <div className="relative flex items-center rounded-[22px] border border-line bg-surface focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-transparent min-h-[44px]">
               <textarea
                 ref={inputRef}
-                rows={2}
+                rows={1}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => {
@@ -933,7 +924,7 @@ export function AICookingAssistant({
                   }
                 }}
                 placeholder={t('ai.placeholder')}
-                className="w-full resize-none overflow-y-auto bg-transparent py-3.5 pl-4 pr-14 text-base leading-snug text-ink placeholder:text-muted focus:outline-none disabled:opacity-60 min-h-[56px] max-h-60"
+                className="w-full resize-none overflow-y-auto bg-transparent py-2.5 pl-4 pr-14 text-base leading-6 text-ink placeholder:text-muted focus:outline-none disabled:opacity-60 min-h-[44px] max-h-40"
                 disabled={isTyping}
                 aria-label={t('ai.placeholder')}
               />
@@ -942,9 +933,9 @@ export function AICookingAssistant({
                 onClick={handleSendMessage}
                 disabled={!inputValue.trim() || isTyping}
                 aria-label="Send message"
-                className="absolute right-2 bottom-2 flex h-11 w-11 items-center justify-center rounded-full bg-herb text-white hover:bg-herb-deep disabled:bg-sage/60 disabled:text-muted transition-colors"
+                className="absolute right-1.5 bottom-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-herb text-white hover:bg-herb-deep disabled:bg-sage/60 disabled:text-muted transition-colors"
               >
-                <SendIcon size={20} />
+                <SendIcon size={16} />
               </button>
             </div>
           </div>

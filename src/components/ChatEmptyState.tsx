@@ -6,9 +6,15 @@ import { greetingPeriodNow } from '../utils/chatGreeting';
 interface ChatEmptyStateProps {
   /** Override clock for tests */
   now?: Date;
+  suggestedPrompts?: string[];
+  onSelectPrompt?: (prompt: string) => void;
 }
 
-export function ChatEmptyState({ now }: ChatEmptyStateProps) {
+export function ChatEmptyState({
+  now,
+  suggestedPrompts = [],
+  onSelectPrompt,
+}: ChatEmptyStateProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { pantryItems, shoppingList } = usePantry();
@@ -39,10 +45,27 @@ export function ChatEmptyState({ now }: ChatEmptyStateProps) {
         <p className="font-display text-lg text-ink mb-3">{periodGreeting}</p>
       ) : null}
       <p className="text-muted text-sm sm:text-base max-w-md mb-6">{t('ai.welcome')}</p>
-      <div className="space-y-1 text-sm text-muted">
+      <div className="space-y-1 text-sm text-muted mb-8">
         <p>{t('home.pantryCount', { count: pantryCount })}</p>
         <p>{t('home.buyCount', { count: buyCount })}</p>
       </div>
+      {suggestedPrompts.length > 0 && onSelectPrompt ? (
+        <div
+          className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center"
+          data-testid="chat-empty-suggestions"
+        >
+          {suggestedPrompts.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              onClick={() => onSelectPrompt(prompt)}
+              className="w-full sm:w-auto text-sm bg-sage/40 hover:bg-sage/60 text-ink px-4 py-2.5 rounded-full border border-line/60 transition-colors"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
