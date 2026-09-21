@@ -229,11 +229,14 @@
     "instructions": "Instructions",
     "preferencesSaved": "Preferences saved",
     "mealSuggestions": "Meal suggestions",
-    "placeholder": "Ask anything...",
+    "placeholder": "Ask about cooking, pantry, or planning…",
     "welcome": "Pick a suggestion below, or just type what you need.",
+    "greetingHi": "Hi, {{name}}",
     "greetingMorning": "Good morning",
     "greetingAfternoon": "Good afternoon",
     "greetingEvening": "Good evening",
+    "chipPantry": "Pantry · {{count}}",
+    "chipBuy": "Buy · {{count}}",
     "newChat": "New chat",
     "emptyHint": "Skip the forms — just tell the AI what you need.",
     "emptyCta": {
@@ -254,6 +257,24 @@
       "Plan dinners for the rest of this week",
       "Import a recipe from a URL (website, YouTube, or Instagram)",
       "Add chicken, rice, and broccoli to my pantry"
+    ],
+    "suggestedPromptCards": [
+      {
+        "title": "Cook with what I have",
+        "prompt": "What can I cook with what I have?"
+      },
+      {
+        "title": "Plan this week’s dinners",
+        "prompt": "Plan dinners for the rest of this week"
+      },
+      {
+        "title": "Import a recipe",
+        "prompt": "Import a recipe from a URL (website, YouTube, or Instagram)"
+      },
+      {
+        "title": "Add items to pantry",
+        "prompt": "Add chicken, rice, and broccoli to my pantry"
+      }
     ],
     "demoWelcome": "Try a prompt below, or type your own.",
     "demoSuggestedPrompts": [

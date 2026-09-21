@@ -141,7 +141,19 @@ export function AppDrawer({
             );
           })}
 
-          <p className="text-xs uppercase tracking-wide text-muted px-3 mt-6 mb-2">
+          <button
+            type="button"
+            onClick={() => {
+              onNewChat();
+              onClose();
+            }}
+            className="mt-3 mb-4 w-full flex items-center justify-center gap-2 bg-herb hover:bg-herb-deep text-white py-3 rounded-full font-semibold transition-colors"
+          >
+            <PlusIcon size={18} />
+            {t('nav.newChat')}
+          </button>
+
+          <p className="text-xs uppercase tracking-wide text-muted px-3 mb-2">
             {t('nav.recents')}
           </p>
 
@@ -172,18 +184,6 @@ export function AppDrawer({
         </nav>
 
         <div className="border-t border-line px-3 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-linen">
-          <button
-            type="button"
-            onClick={() => {
-              onNewChat();
-              onClose();
-            }}
-            className="w-full flex items-center justify-center gap-2 bg-herb hover:bg-herb-deep text-white py-3 rounded-full mb-2 font-semibold transition-colors"
-          >
-            <PlusIcon size={18} />
-            {t('nav.newChat')}
-          </button>
-
           <button
             type="button"
             onClick={() => go('settings')}

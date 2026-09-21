@@ -3,17 +3,26 @@ import { useAuth } from '../contexts/authContext';
 import { usePantry } from '../contexts/pantryContext';
 import { greetingPeriodNow } from '../utils/chatGreeting';
 
+export type SuggestedPromptCard = {
+  title: string;
+  prompt: string;
+};
+
 interface ChatEmptyStateProps {
   /** Override clock for tests */
   now?: Date;
-  suggestedPrompts?: string[];
+  suggestedPromptCards?: SuggestedPromptCard[];
   onSelectPrompt?: (prompt: string) => void;
+  onViewPantry?: () => void;
+  onViewShoppingList?: () => void;
 }
 
 export function ChatEmptyState({
   now,
-  suggestedPrompts = [],
+  suggestedPromptCards = [],
   onSelectPrompt,
+  onViewPantry,
+  onViewShoppingList,
 }: ChatEmptyStateProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -28,40 +37,64 @@ export function ChatEmptyState({
         : 'ai.greetingEvening';
 
   const displayName = user?.first_name?.trim() || user?.name?.trim() || '';
-  const periodGreeting = t(greetingKey);
   const headline = displayName
-    ? t('home.welcomeBack', { name: displayName })
-    : periodGreeting;
+    ? t('ai.greetingHi', { name: displayName })
+    : t(greetingKey);
 
   const pantryCount = Array.isArray(pantryItems) ? pantryItems.length : 0;
   const buyCount = (Array.isArray(shoppingList) ? shoppingList : []).filter(
     (item) => !item.checked,
   ).length;
 
+  const cards = suggestedPromptCards.filter(
+    (card) =>
+      card &&
+      typeof card.title === 'string' &&
+      card.title.trim() &&
+      typeof card.prompt === 'string' &&
+      card.prompt.trim(),
+  );
+
   return (
-    <div className="h-full min-h-[14rem] flex flex-col items-center justify-center px-6 py-8 text-center">
-      <h2 className="font-display text-2xl font-semibold text-ink mb-2">{headline}</h2>
-      {displayName ? (
-        <p className="font-display text-lg text-ink mb-3">{periodGreeting}</p>
-      ) : null}
-      <p className="text-muted text-sm sm:text-base max-w-md mb-6">{t('ai.welcome')}</p>
-      <div className="space-y-1 text-sm text-muted mb-8">
-        <p>{t('home.pantryCount', { count: pantryCount })}</p>
-        <p>{t('home.buyCount', { count: buyCount })}</p>
-      </div>
-      {suggestedPrompts.length > 0 && onSelectPrompt ? (
+    <div className="h-full min-h-[14rem] flex flex-col items-center justify-center px-6 py-6 text-center">
+      <h2 className="font-display text-2xl font-semibold text-ink">{headline}</h2>
+
+      {(onViewPantry || onViewShoppingList) && (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          {onViewPantry ? (
+            <button
+              type="button"
+              onClick={onViewPantry}
+              className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm text-ink hover:bg-sage/50 transition-colors"
+            >
+              {t('ai.chipPantry', { count: pantryCount })}
+            </button>
+          ) : null}
+          {onViewShoppingList ? (
+            <button
+              type="button"
+              onClick={onViewShoppingList}
+              className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm text-ink hover:bg-sage/50 transition-colors"
+            >
+              {t('ai.chipBuy', { count: buyCount })}
+            </button>
+          ) : null}
+        </div>
+      )}
+
+      {cards.length > 0 && onSelectPrompt ? (
         <div
-          className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center"
+          className="mt-6 grid w-full max-w-md grid-cols-2 gap-2"
           data-testid="chat-empty-suggestions"
         >
-          {suggestedPrompts.map((prompt) => (
+          {cards.map((card) => (
             <button
-              key={prompt}
+              key={card.prompt}
               type="button"
-              onClick={() => onSelectPrompt(prompt)}
-              className="w-full sm:w-auto text-sm bg-sage/40 hover:bg-sage/60 text-ink px-4 py-2.5 rounded-full border border-line/60 transition-colors"
+              onClick={() => onSelectPrompt(card.prompt)}
+              className="min-h-[3.25rem] rounded-xl border border-line bg-sage/30 px-3 py-3 text-left text-sm font-medium text-ink hover:bg-sage/50 transition-colors"
             >
-              {prompt}
+              <span className="line-clamp-2">{card.title}</span>
             </button>
           ))}
         </div>

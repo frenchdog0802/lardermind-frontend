@@ -76,8 +76,11 @@ Defined in `src/index.css`:
 ## Layout Patterns
 
 ### App chrome
-- **Authenticated:** Left **overlay drawer** (`AppDrawer.tsx`) — LarderMind wordmark, primary destinations, Recents, footer (New chat / Settings / Subscription). Hamburger in `AppHeader` opens it.
-- **Default home:** Chat (`AICookingAssistant`) — full-height agent transcript + sticky composer.
+- **Authenticated:** Left **overlay drawer** (`AppDrawer.tsx`) — LarderMind wordmark, primary destinations, **+ New chat** (above Recents), Recents list, footer (Settings / Subscription). Hamburger in `AppHeader` opens it.
+- **Default home:** Chat (`AICookingAssistant`) — full-height agent transcript + sticky elevated composer.
+- **Chat empty state:** Single greeting line (`Hi, {{name}}` or period greeting); optional Pantry / Buy context chips; **2×2** short-label suggestion cards (full prompt on select). No stacked lifestyle copy.
+- **Composer:** `bg-surface` field on linen chrome, soft elevation, ~52px min height; send muted until ready, herb fill when `canSend`.
+- **Chat header title:** `New chat` when empty; else session title (fallback Chat).
 - **Do not** use desktop Sidebar + mobile BottomNav split (removed).
 - **No** full-width orange/red gradient headers on authenticated screens. Quiet `AppHeader` / `.page-title` in content.
 

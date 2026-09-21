@@ -7,7 +7,7 @@ import { mealPlanApi } from '../api/mealPlan';
 import { RecipeSuggestion } from '../api/types';
 import ChatMessageContent from './ChatMessageContent';
 import { AppHeader } from './AppHeader';
-import { ChatEmptyState } from './ChatEmptyState';
+import { ChatEmptyState, SuggestedPromptCard } from './ChatEmptyState';
 
 interface AICookingAssistantProps {
   /** When false, the view is hidden but stays mounted so streams keep running. */
@@ -109,7 +109,7 @@ export function AICookingAssistant({
   const [suggestedRecipes, setSuggestedRecipes] = useState<RecipeSuggestion[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeSuggestion | null>(null);
   const [addingToMenuRecipeId, setAddingToMenuRecipeId] = useState<string | null>(null);
-  const [, setSessions] = useState<ChatSession[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{
     sessionId: string;
@@ -118,10 +118,25 @@ export function AICookingAssistant({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const suggestedPrompts = useMemo(() => {
-    const prompts = t('ai.suggestedPrompts', { returnObjects: true });
-    return Array.isArray(prompts) ? (prompts as string[]) : [];
+  const suggestedPromptCards = useMemo(() => {
+    const raw = t('ai.suggestedPromptCards', { returnObjects: true });
+    if (!Array.isArray(raw)) return [] as SuggestedPromptCard[];
+    return (raw as SuggestedPromptCard[]).filter(
+      (card) =>
+        card &&
+        typeof card.title === 'string' &&
+        typeof card.prompt === 'string' &&
+        card.title.trim() &&
+        card.prompt.trim(),
+    );
   }, [t, i18n.language]);
+
+  const headerTitle =
+    messages.length === 0
+      ? t('nav.newChat')
+      : sessions.find((s) => s.id === activeSessionId)?.title?.trim() || t('nav.aiChat');
+
+  const canSend = Boolean(inputValue.trim()) && !isTyping;
 
   // Auto-grow composer; beyond the cap the field scrolls so typed text stays visible.
   const COMPOSER_MAX_HEIGHT_PX = 240;
@@ -595,7 +610,7 @@ export function AICookingAssistant({
   return (
     <div className="flex flex-col w-full h-[100dvh] min-h-screen bg-linen">
       <AppHeader
-        title={t('nav.aiChat')}
+        title={headerTitle}
         onOpenMenu={onOpenMenu}
         onNewChat={() => {
           if (!isTyping) void handleNewSession();
@@ -694,8 +709,10 @@ export function AICookingAssistant({
             </div>
           ) : messages.length === 0 ? (
             <ChatEmptyState
-              suggestedPrompts={suggestedPrompts}
+              suggestedPromptCards={suggestedPromptCards}
               onSelectPrompt={setInputValue}
+              onViewPantry={onViewPantry}
+              onViewShoppingList={onViewShoppingList}
             />
           ) : (
             <div className="space-y-6 pb-4">
@@ -909,9 +926,9 @@ export function AICookingAssistant({
       </div>
 
       {!selectedRecipe && (
-        <div className="shrink-0 border-t border-line bg-linen px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
+        <div className="shrink-0 border-t border-line/80 bg-linen px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
           <div className="max-w-3xl mx-auto w-full">
-            <div className="relative flex items-center rounded-[22px] border border-line bg-surface focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-transparent min-h-[44px]">
+            <div className="relative flex items-end rounded-[22px] border border-line bg-surface shadow-sm focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-transparent min-h-[52px]">
               <textarea
                 ref={inputRef}
                 rows={1}
@@ -924,16 +941,20 @@ export function AICookingAssistant({
                   }
                 }}
                 placeholder={t('ai.placeholder')}
-                className="w-full resize-none overflow-y-auto bg-transparent py-2.5 pl-4 pr-14 text-base leading-6 text-ink placeholder:text-muted focus:outline-none disabled:opacity-60 min-h-[44px] max-h-40"
+                className="w-full resize-none overflow-y-auto bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink placeholder:text-muted focus:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
                 disabled={isTyping}
                 aria-label={t('ai.placeholder')}
               />
               <button
                 type="button"
                 onClick={handleSendMessage}
-                disabled={!inputValue.trim() || isTyping}
+                disabled={!canSend}
                 aria-label="Send message"
-                className="absolute right-1.5 bottom-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-herb text-white hover:bg-herb-deep disabled:bg-sage/60 disabled:text-muted transition-colors"
+                className={`absolute right-1.5 bottom-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+                  canSend
+                    ? 'bg-herb text-white hover:bg-herb-deep'
+                    : 'bg-transparent text-muted'
+                }`}
               >
                 <SendIcon size={16} />
               </button>

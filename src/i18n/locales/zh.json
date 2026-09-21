@@ -229,11 +229,14 @@
     "instructions": "作法",
     "preferencesSaved": "偏好已儲存",
     "mealSuggestions": "餐點建議",
-    "placeholder": "問我任何事...",
+    "placeholder": "問烹飪、食材庫或規劃…",
     "welcome": "點選下方建議，或直接輸入你想做的事。",
+    "greetingHi": "你好，{{name}}",
     "greetingMorning": "早安",
     "greetingAfternoon": "午安",
     "greetingEvening": "晚安",
+    "chipPantry": "食材庫 · {{count}}",
+    "chipBuy": "待購 · {{count}}",
     "newChat": "新對話",
     "emptyHint": "不用自己填表單 — 直接跟 AI 說你要什麼。",
     "emptyCta": {
@@ -254,6 +257,24 @@
       "幫我規劃這週剩下的晚餐",
       "從網址匯入食譜（網站、YouTube 或 Instagram）",
       "把雞胸肉、米和花椰菜加入冰箱"
+    ],
+    "suggestedPromptCards": [
+      {
+        "title": "用現有食材煮",
+        "prompt": "我現有的食材可以煮什麼？"
+      },
+      {
+        "title": "規劃本週晚餐",
+        "prompt": "幫我規劃這週剩下的晚餐"
+      },
+      {
+        "title": "匯入食譜",
+        "prompt": "從網址匯入食譜（網站、YouTube 或 Instagram）"
+      },
+      {
+        "title": "加入食材庫",
+        "prompt": "把雞胸肉、米和花椰菜加入冰箱"
+      }
     ],
     "demoWelcome": "試試下方提示，或自己輸入。",
     "demoSuggestedPrompts": [
