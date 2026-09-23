@@ -52,22 +52,31 @@ h6 {
   color: var(--ink);
 }
 
-input,
-textarea,
-select {
-  background-color: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  font-family: 'Source Sans 3', system-ui, sans-serif;
+@layer base {
+  input,
+  textarea,
+  select {
+    background-color: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    font-family: 'Source Sans 3', system-ui, sans-serif;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    transition: all 200ms ease;
+  }
 }
 
 button {
   font-family: 'Source Sans 3', system-ui, sans-serif;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--muted);
 }
 
 *:focus-visible {
@@ -79,13 +88,6 @@ button,
 a,
 [role="button"] {
   cursor: pointer;
-}
-
-button,
-input,
-textarea,
-select {
-  transition: all 200ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

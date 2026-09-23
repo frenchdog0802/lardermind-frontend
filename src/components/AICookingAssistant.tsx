@@ -8,6 +8,11 @@ import { RecipeSuggestion } from '../api/types';
 import ChatMessageContent from './ChatMessageContent';
 import { AppHeader } from './AppHeader';
 import { ChatEmptyState, SuggestedPromptCard } from './ChatEmptyState';
+import { Loading } from './Loading';
+import {
+  resolveChatBodyMode,
+  resolveChatHeaderIsNewChat,
+} from '../utils/chatBootstrapGate';
 
 interface AICookingAssistantProps {
   /** When false, the view is hidden but stays mounted so streams keep running. */
@@ -111,6 +116,7 @@ export function AICookingAssistant({
   const [addingToMenuRecipeId, setAddingToMenuRecipeId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [pendingApproval, setPendingApproval] = useState<{
     sessionId: string;
     pendingTools: PendingToolSummary[];
@@ -131,10 +137,10 @@ export function AICookingAssistant({
     );
   }, [t, i18n.language]);
 
-  const headerTitle =
-    messages.length === 0
-      ? t('nav.newChat')
-      : sessions.find((s) => s.id === activeSessionId)?.title?.trim() || t('nav.aiChat');
+  const chatBodyMode = resolveChatBodyMode(isBootstrapping, messages.length);
+  const headerTitle = resolveChatHeaderIsNewChat(isBootstrapping, messages.length)
+    ? t('nav.newChat')
+    : sessions.find((s) => s.id === activeSessionId)?.title?.trim() || t('nav.aiChat');
 
   const canSend = Boolean(inputValue.trim()) && !isTyping;
 
@@ -170,6 +176,8 @@ export function AICookingAssistant({
         } catch (historyError) {
           console.error('Failed to load chat history', historyError);
         }
+      } finally {
+        setIsBootstrapping(false);
       }
     };
 
@@ -707,7 +715,9 @@ export function AICookingAssistant({
                 </div>
               </div>
             </div>
-          ) : messages.length === 0 ? (
+          ) : chatBodyMode === 'loading' ? (
+            <Loading compact />
+          ) : chatBodyMode === 'empty' ? (
             <ChatEmptyState
               suggestedPromptCards={suggestedPromptCards}
               onSelectPrompt={setInputValue}
@@ -715,17 +725,20 @@ export function AICookingAssistant({
               onViewShoppingList={onViewShoppingList}
             />
           ) : (
-            <div className="space-y-6 pb-4">
+            <div className="space-y-8 pb-4">
               {messages.map((message) => (
-                <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  key={message.id}
+                  className={`group flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
                   <div
-                    className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 sm:p-4 ${
+                    className={
                       message.role === 'user'
-                        ? 'bg-herb text-white'
+                        ? 'max-w-[min(85%,28rem)] min-w-[4.5rem] rounded-2xl px-4 py-2.5 sm:py-3 bg-herb text-white'
                         : message.type === 'error'
-                          ? 'bg-sage/50 text-herb-deep border border-line'
-                          : 'bg-sage/40 text-ink'
-                    }`}
+                          ? 'w-full max-w-3xl rounded-2xl px-4 py-3 bg-sage/50 text-herb-deep border border-line'
+                          : 'w-full max-w-3xl text-ink'
+                    }
                   >
                     <div>
                       {message.streaming && !message.content ? (
@@ -876,8 +889,9 @@ export function AICookingAssistant({
                         </ul>
                       </div>
                     )}
-                    <div
-                      className={`text-xs mt-1 ${
+                    <time
+                      dateTime={new Date(message.timestamp).toISOString()}
+                      className={`block text-xs mt-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${
                         message.role === 'user'
                           ? 'text-white/70'
                           : message.type === 'error'
@@ -886,7 +900,7 @@ export function AICookingAssistant({
                       }`}
                     >
                       {formatTimestamp(message.timestamp)}
-                    </div>
+                    </time>
                   </div>
                 </div>
               ))}
@@ -926,9 +940,9 @@ export function AICookingAssistant({
       </div>
 
       {!selectedRecipe && (
-        <div className="shrink-0 border-t border-line/80 bg-linen px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
+        <div className="shrink-0 bg-linen px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
           <div className="max-w-3xl mx-auto w-full">
-            <div className="relative flex items-end rounded-[22px] border border-line bg-surface shadow-sm focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-transparent min-h-[52px]">
+            <div className="relative flex items-end rounded-[22px] border border-line bg-surface shadow-sm focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-herb/40 min-h-[52px]">
               <textarea
                 ref={inputRef}
                 rows={1}
@@ -940,10 +954,9 @@ export function AICookingAssistant({
                     handleSendMessage();
                   }
                 }}
-                placeholder={t('ai.placeholder')}
-                className="w-full resize-none overflow-y-auto bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink placeholder:text-muted focus:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
+                className="w-full resize-none overflow-y-auto border-0 bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink focus:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
                 disabled={isTyping}
-                aria-label={t('ai.placeholder')}
+                aria-label={t('ai.title')}
               />
               <button
                 type="button"

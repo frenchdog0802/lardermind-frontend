@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 
 interface ChatMessageContentProps {
   content: string;
-  /** User bubbles use light-on-dark; assistant uses dark-on-sage. */
+  /** User bubbles use light-on-dark; assistant uses ink on linen (prose). */
   variant?: 'user' | 'assistant';
 }
 
