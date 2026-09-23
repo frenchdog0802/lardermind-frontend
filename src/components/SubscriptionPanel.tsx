@@ -5,13 +5,20 @@ import { UpgradeButtons } from './UpgradeButtons';
 interface SubscriptionPanelProps {
   checkoutSuccess?: boolean;
   checkoutCancelled?: boolean;
+  portalReturn?: boolean;
 }
 
-export function SubscriptionPanel({ checkoutSuccess = false, checkoutCancelled = false }: SubscriptionPanelProps) {
+export function SubscriptionPanel({
+  checkoutSuccess = false,
+  checkoutCancelled = false,
+  portalReturn = false,
+}: SubscriptionPanelProps) {
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stripeEnabled, setStripeEnabled] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -35,10 +42,22 @@ export function SubscriptionPanel({ checkoutSuccess = false, checkoutCancelled =
   }, []);
 
   useEffect(() => {
-    if (checkoutSuccess) {
+    if (checkoutSuccess || portalReturn) {
       load();
     }
-  }, [checkoutSuccess]);
+  }, [checkoutSuccess, portalReturn]);
+
+  const openPortal = async () => {
+    setPortalLoading(true);
+    setPortalError('');
+    try {
+      const { portalUrl } = await subscriptionApi.createPortal();
+      window.location.href = portalUrl;
+    } catch (err) {
+      setPortalError(err instanceof Error ? err.message : 'Unable to open billing portal');
+      setPortalLoading(false);
+    }
+  };
 
   if (loading) {
     return <p className="text-sm text-muted">Loading subscription…</p>;
@@ -53,7 +72,8 @@ export function SubscriptionPanel({ checkoutSuccess = false, checkoutCancelled =
   }
 
   const usage = status.usage;
-  const showUpgrade = !status.isPro || status.isTrial;
+  const showUpgrade = !status.isPro;
+  const showManage = status.isPro && stripeEnabled;
 
   return (
     <div className="space-y-6">
@@ -66,6 +86,12 @@ export function SubscriptionPanel({ checkoutSuccess = false, checkoutCancelled =
       {checkoutCancelled && (
         <div className="border border-line bg-linen p-4 text-sm text-muted">
           Checkout was cancelled. You can upgrade anytime from here.
+        </div>
+      )}
+
+      {portalReturn && (
+        <div className="border border-line bg-linen p-4 text-sm text-muted">
+          Back from billing portal. Your plan status is shown below.
         </div>
       )}
 
@@ -102,11 +128,30 @@ export function SubscriptionPanel({ checkoutSuccess = false, checkoutCancelled =
         </ul>
       </div>
 
+      {showManage && (
+        <div className="border border-line p-4">
+          <h3 className="font-display text-lg font-semibold text-ink">Billing</h3>
+          <p className="mt-2 text-sm text-muted">
+            Update payment method, switch plans, or cancel in the Stripe customer portal.
+          </p>
+          <button
+            type="button"
+            onClick={openPortal}
+            disabled={portalLoading}
+            className="btn-secondary mt-4 disabled:opacity-60"
+          >
+            {portalLoading ? 'Opening…' : 'Manage billing'}
+          </button>
+          {portalError ? <p className="mt-2 text-sm text-herb">{portalError}</p> : null}
+        </div>
+      )}
+
       {showUpgrade && (
         <div className="border border-herb bg-sage/20 p-4">
           <h3 className="font-display text-lg font-semibold text-ink">Upgrade to Pro</h3>
           <p className="mt-2 text-sm text-muted">
             Pro includes 200 AI messages per day, 50 social/URL imports per month, and unlimited recipes and uploads.
+            New subscribers get a 7-day trial.
           </p>
           <p className="mt-3 text-sm text-muted">$4.99/month or $39.99/year.</p>
           <UpgradeButtons stripeEnabled={stripeEnabled} className="mt-4" />

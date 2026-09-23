@@ -288,5 +288,38 @@
       "Plan dinners for the rest of this week": "Here's your plan — skipping spicy meals (Alex's preference) and using your expiring spinach:\n\n• Mon: Lemon herb chicken & rice\n• Tue: Spinach lasagna\n• Wed: Veggie stir-fry with tofu\n• Thu: Slow-cooker chili\n• Fri: Fish tacos (kid-friendly)\n\nAdded 6 items to your grocery list.",
       "Add chicken, rice, and broccoli to my pantry": "Done — updated your pantry:\n\n• +2 lb chicken breast\n• +1 bag rice\n• +1 head broccoli\n\nI'll prioritize these in your next meal plan."
     }
+  },
+  "setupGuide": {
+    "title": "Setup guide",
+    "progress": "{{done}} of {{total}} complete",
+    "allDone": "You're all set — kitchen basics are ready.",
+    "steps": {
+      "pantry": {
+        "title": "Stock your pantry",
+        "body": "Add what’s in your kitchen so the AI can cook from what you have.",
+        "cta": "Open inventory"
+      },
+      "recipes": {
+        "title": "Add recipes",
+        "body": "Import or create at least one recipe to plan and cook from.",
+        "cta": "Open recipes"
+      },
+      "chat": {
+        "title": "Chat with AI",
+        "body": "Ask what you can cook — this is where LarderMind clicks.",
+        "cta": "Ask what I can cook"
+      },
+      "meals": {
+        "title": "Plan meals",
+        "body": "Schedule dinners on the calendar, or ask AI to draft the week.",
+        "ctaCalendar": "Open calendar",
+        "ctaAi": "Ask AI to plan dinners"
+      },
+      "shopping": {
+        "title": "Build a shopping list",
+        "body": "Capture what you’re missing for the week ahead.",
+        "cta": "Open shopping list"
+      }
+    }
   }
 }

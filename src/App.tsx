@@ -14,6 +14,8 @@ import { AICookingAssistant } from './components/AICookingAssistant';
 import { AppDrawer, type AppDrawerView } from './components/AppDrawer';
 import { SubscriptionView } from './components/SubscriptionView';
 import { MarketingLanding } from './components/MarketingLanding';
+import { SetupGuide } from './components/SetupGuide';
+import { useMediaQuery } from './hooks/useMediaQuery';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 const GUEST_VIEWS = new Set(['landing', 'login', 'signup']);
@@ -35,7 +37,10 @@ function AppContent() {
   const [requestNewChat, setRequestNewChat] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [visitedViews, setVisitedViews] = useState<Set<string>>(() => new Set(['aiAssistant']));
-  const [subscriptionNotice, setSubscriptionNotice] = useState<'success' | 'cancelled' | null>(null);
+  const [subscriptionNotice, setSubscriptionNotice] = useState<
+    'success' | 'cancelled' | 'portal_return' | null
+  >(null);
+  const isDesktopRail = useMediaQuery('(min-width: 768px)');
   const {
     isAuthenticated,
     initializing,
@@ -47,7 +52,11 @@ function AppContent() {
 
     const params = new URLSearchParams(window.location.search);
     const subscriptionParam = params.get('subscription');
-    if (subscriptionParam === 'success' || subscriptionParam === 'cancelled') {
+    if (
+      subscriptionParam === 'success' ||
+      subscriptionParam === 'cancelled' ||
+      subscriptionParam === 'portal_return'
+    ) {
       setSubscriptionNotice(subscriptionParam);
       if (isAuthenticated) {
         setCurrentView('subscription');
@@ -83,13 +92,13 @@ function AppContent() {
   }, [currentView, isAuthenticated]);
 
   useEffect(() => {
-    if (!drawerOpen) return;
+    if (isDesktopRail || !drawerOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [drawerOpen]);
+  }, [drawerOpen, isDesktopRail]);
 
   const navigateToSignUp = () => setCurrentView('signup');
   const navigateToLogin = () => setCurrentView('login');
@@ -105,6 +114,7 @@ function AppContent() {
 
   const openMenu = () => setDrawerOpen(true);
   const closeMenu = () => setDrawerOpen(false);
+  const menuOpener = isDesktopRail ? undefined : openMenu;
 
   const handleDrawerNavigate = (view: AppDrawerView) => {
     setCurrentView(view);
@@ -131,10 +141,15 @@ function AppContent() {
     isAuthenticated && visitedViews.has(view);
 
   return (
-    <div className="w-full min-h-screen bg-linen">
+    <div
+      className={`w-full min-h-screen bg-linen ${
+        !isGuestView && isDesktopRail ? 'flex' : ''
+      }`}
+    >
       {!isGuestView && (
         <AppDrawer
-          open={drawerOpen}
+          variant={isDesktopRail ? 'rail' : 'overlay'}
+          open={isDesktopRail || drawerOpen}
           activeView={currentView}
           onClose={closeMenu}
           onNavigate={handleDrawerNavigate}
@@ -143,6 +158,7 @@ function AppContent() {
         />
       )}
 
+      <div className="flex-1 min-w-0">
       {currentView === 'landing' && (
         <MarketingLanding onGetStarted={navigateToSignUp} onLogin={navigateToLogin} />
       )}
@@ -167,7 +183,7 @@ function AppContent() {
               setPendingSessionId(null);
               setRequestNewChat(false);
             }}
-            onOpenMenu={openMenu}
+            onOpenMenu={menuOpener}
             onViewRecipe={(recipeId) => {
               setSelectedRecipeId(recipeId);
               setCurrentView('recipeManager');
@@ -182,7 +198,7 @@ function AppContent() {
         <div className={currentView === 'calendar' ? undefined : 'hidden'} aria-hidden={currentView !== 'calendar'}>
           <Calendar
             onBack={navigateToAiAssistant}
-            onOpenMenu={openMenu}
+            onOpenMenu={menuOpener}
           />
         </div>
       )}
@@ -193,7 +209,7 @@ function AppContent() {
         >
           <RecipeManager
             onBack={navigateToAiAssistant}
-            onOpenMenu={openMenu}
+            onOpenMenu={menuOpener}
             selectedRecipeId={selectedRecipeId}
             onSelectedRecipeHandled={() => setSelectedRecipeId(null)}
           />
@@ -203,7 +219,7 @@ function AppContent() {
         <div className={currentView === 'settings' ? undefined : 'hidden'} aria-hidden={currentView !== 'settings'}>
           <Settings
             onBack={navigateToAiAssistant}
-            onOpenMenu={openMenu}
+            onOpenMenu={menuOpener}
           />
         </div>
       )}
@@ -213,9 +229,10 @@ function AppContent() {
           aria-hidden={currentView !== 'subscription'}
         >
           <SubscriptionView
-            onOpenMenu={openMenu}
+            onOpenMenu={menuOpener}
             checkoutSuccess={subscriptionNotice === 'success'}
             checkoutCancelled={subscriptionNotice === 'cancelled'}
+            portalReturn={subscriptionNotice === 'portal_return'}
           />
         </div>
       )}
@@ -226,7 +243,7 @@ function AppContent() {
         >
           <PantryInventory
             onBack={navigateToAiAssistant}
-            onOpenMenu={openMenu}
+            onOpenMenu={menuOpener}
           />
         </div>
       )}
@@ -237,12 +254,24 @@ function AppContent() {
         >
           <ShoppingList
             onBack={navigateToAiAssistant}
-            onOpenMenu={openMenu}
+            onOpenMenu={menuOpener}
           />
         </div>
       )}
       {currentView === 'signup' && (
         <SignUp onSignUpSuccess={navigateToAiAssistant} onLogin={navigateToLogin} />
+      )}
+      </div>
+
+      {!isGuestView && isDesktopRail && (
+        <SetupGuide
+          onNavigate={handleDrawerNavigate}
+          onAskAi={(prompt) => {
+            setPendingAiPrompt(prompt);
+            setRequestNewChat(false);
+            setCurrentView('aiAssistant');
+          }}
+        />
       )}
     </div>
   );

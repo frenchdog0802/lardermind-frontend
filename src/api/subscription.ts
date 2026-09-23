@@ -46,6 +46,10 @@ export interface PlansResponse {
   stripeCheckoutEnabled: boolean;
 }
 
+export type CheckoutStartResult =
+  | { kind: 'checkout'; checkoutUrl: string }
+  | { kind: 'portal'; portalUrl: string };
+
 function unwrap<T>(response: { success: boolean; message?: string; data?: T }): T {
   if (!response.success || response.data === undefined) {
     throw new Error(response.message ?? 'Subscription request failed');
@@ -72,10 +76,22 @@ export const subscriptionApi = {
     return unwrap(response);
   },
 
-  createCheckout: async (billingPeriod: 'monthly' | 'yearly') => {
-    const response = await api.post<{ checkoutUrl: string }>('/api/subscription/checkout', {
-      billingPeriod,
-    });
+  createCheckout: async (billingPeriod: 'monthly' | 'yearly'): Promise<CheckoutStartResult> => {
+    const response = await api.post<{ checkoutUrl?: string; portalUrl?: string }>(
+      '/api/subscription/checkout',
+      { billingPeriod },
+    );
+    if (response.data?.portalUrl) {
+      return { kind: 'portal', portalUrl: response.data.portalUrl };
+    }
+    if (response.success && response.data?.checkoutUrl) {
+      return { kind: 'checkout', checkoutUrl: response.data.checkoutUrl };
+    }
+    throw new Error(response.message ?? 'Unable to start checkout');
+  },
+
+  createPortal: async (): Promise<{ portalUrl: string }> => {
+    const response = await api.post<{ portalUrl: string }>('/api/subscription/portal');
     return unwrap(response);
   },
 };

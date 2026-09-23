@@ -3,15 +3,17 @@ import { AppHeader } from './AppHeader';
 import { SubscriptionPanel } from './SubscriptionPanel';
 
 interface SubscriptionViewProps {
-  onOpenMenu: () => void;
+  onOpenMenu?: () => void;
   checkoutSuccess?: boolean;
   checkoutCancelled?: boolean;
+  portalReturn?: boolean;
 }
 
 export function SubscriptionView({
   onOpenMenu,
   checkoutSuccess = false,
   checkoutCancelled = false,
+  portalReturn = false,
 }: SubscriptionViewProps) {
   const { t } = useTranslation();
 
@@ -22,6 +24,7 @@ export function SubscriptionView({
         <SubscriptionPanel
           checkoutSuccess={checkoutSuccess}
           checkoutCancelled={checkoutCancelled}
+          portalReturn={portalReturn}
         />
       </main>
     </div>

@@ -13,6 +13,7 @@ import {
   resolveChatBodyMode,
   resolveChatHeaderIsNewChat,
 } from '../utils/chatBootstrapGate';
+import { markSetupGuideChatStarted } from '../utils/setupGuide';
 
 interface AICookingAssistantProps {
   /** When false, the view is hidden but stays mounted so streams keep running. */
@@ -25,7 +26,7 @@ interface AICookingAssistantProps {
   /** Create / focus a blank chat when true. */
   requestNewChat?: boolean;
   onSessionRequestConsumed?: () => void;
-  onOpenMenu: () => void;
+  onOpenMenu?: () => void;
   onViewRecipe?: (recipeId: string) => void;
   onViewShoppingList?: () => void;
   onViewCalendar?: () => void;
@@ -566,6 +567,7 @@ export function AICookingAssistant({
   // Handle sending a message
   const handleSendMessage = () => {
     if (!inputValue.trim()) return;
+    markSetupGuideChatStarted();
     // Add user message
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -615,8 +617,52 @@ export function AICookingAssistant({
     });
   };
 
+  const isEmptyStage = !selectedRecipe && chatBodyMode === 'empty';
+
+  const composerField = (
+    <div className="relative flex items-end rounded-[22px] border border-line bg-surface shadow-sm focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-herb/40 min-h-[52px]">
+      <textarea
+        ref={inputRef}
+        rows={1}
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSendMessage();
+          }
+        }}
+        className="w-full resize-none overflow-y-auto border-0 bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink focus:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
+        disabled={isTyping}
+        aria-label={t('ai.title')}
+      />
+      <button
+        type="button"
+        onClick={handleSendMessage}
+        disabled={!canSend}
+        aria-label="Send message"
+        className={`absolute right-1.5 bottom-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+          canSend
+            ? 'bg-herb text-white hover:bg-herb-deep'
+            : 'bg-transparent text-muted'
+        }`}
+      >
+        <SendIcon size={16} />
+      </button>
+    </div>
+  );
+
   return (
-    <div className="flex flex-col w-full h-[100dvh] min-h-screen bg-linen">
+    <div className="relative flex flex-col w-full h-[100dvh] min-h-screen bg-linen overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 55% at 50% 38%, rgba(216, 224, 208, 0.42), transparent 70%)',
+        }}
+      />
+      <div className="relative z-10 flex flex-col flex-1 min-h-0">
       <AppHeader
         title={headerTitle}
         onOpenMenu={onOpenMenu}
@@ -659,6 +705,20 @@ export function AICookingAssistant({
         </div>
       )}
 
+      {isEmptyStage ? (
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center px-4 sm:px-6 py-8">
+          <div className="w-full max-w-3xl">
+            <ChatEmptyState
+              suggestedPromptCards={suggestedPromptCards}
+              onSelectPrompt={setInputValue}
+              onViewPantry={onViewPantry}
+              onViewShoppingList={onViewShoppingList}
+            />
+            <div className="mt-8 w-full">{composerField}</div>
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-4">
           {selectedRecipe ? (
@@ -717,13 +777,6 @@ export function AICookingAssistant({
             </div>
           ) : chatBodyMode === 'loading' ? (
             <Loading compact />
-          ) : chatBodyMode === 'empty' ? (
-            <ChatEmptyState
-              suggestedPromptCards={suggestedPromptCards}
-              onSelectPrompt={setInputValue}
-              onViewPantry={onViewPantry}
-              onViewShoppingList={onViewShoppingList}
-            />
           ) : (
             <div className="space-y-8 pb-4">
               {messages.map((message) => (
@@ -737,7 +790,7 @@ export function AICookingAssistant({
                         ? 'max-w-[min(85%,28rem)] min-w-[4.5rem] rounded-2xl px-4 py-2.5 sm:py-3 bg-herb text-white'
                         : message.type === 'error'
                           ? 'w-full max-w-3xl rounded-2xl px-4 py-3 bg-sage/50 text-herb-deep border border-line'
-                          : 'w-full max-w-3xl text-ink'
+                          : 'w-full max-w-3xl text-ink text-base sm:text-[1.0625rem] leading-relaxed'
                     }
                   >
                     <div>
@@ -940,41 +993,13 @@ export function AICookingAssistant({
       </div>
 
       {!selectedRecipe && (
-        <div className="shrink-0 bg-linen px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
-          <div className="max-w-3xl mx-auto w-full">
-            <div className="relative flex items-end rounded-[22px] border border-line bg-surface shadow-sm focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-herb/40 min-h-[52px]">
-              <textarea
-                ref={inputRef}
-                rows={1}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                className="w-full resize-none overflow-y-auto border-0 bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink focus:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
-                disabled={isTyping}
-                aria-label={t('ai.title')}
-              />
-              <button
-                type="button"
-                onClick={handleSendMessage}
-                disabled={!canSend}
-                aria-label="Send message"
-                className={`absolute right-1.5 bottom-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-                  canSend
-                    ? 'bg-herb text-white hover:bg-herb-deep'
-                    : 'bg-transparent text-muted'
-                }`}
-              >
-                <SendIcon size={16} />
-              </button>
-            </div>
-          </div>
+        <div className="shrink-0 bg-transparent px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
+          <div className="max-w-3xl mx-auto w-full">{composerField}</div>
         </div>
       )}
+      </>
+      )}
+      </div>
     </div>
   );
 }

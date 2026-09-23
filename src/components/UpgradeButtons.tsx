@@ -14,8 +14,12 @@ export function UpgradeButtons({ stripeEnabled, className = '' }: UpgradeButtons
     setLoadingPlan(billingPeriod);
     setError('');
     try {
-      const { checkoutUrl } = await subscriptionApi.createCheckout(billingPeriod);
-      window.location.href = checkoutUrl;
+      const result = await subscriptionApi.createCheckout(billingPeriod);
+      if (result.kind === 'portal') {
+        window.location.href = result.portalUrl;
+        return;
+      }
+      window.location.href = result.checkoutUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to start checkout');
       setLoadingPlan(null);

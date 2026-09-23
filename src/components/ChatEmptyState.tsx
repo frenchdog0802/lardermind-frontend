@@ -57,7 +57,9 @@ export function ChatEmptyState({
 
   return (
     <div className="h-full min-h-[14rem] flex flex-col items-center justify-center px-6 py-6 text-center">
-      <h2 className="font-display text-2xl font-semibold text-ink">{headline}</h2>
+      <h2 className="font-display text-3xl sm:text-4xl font-semibold text-ink tracking-tight">
+        {headline}
+      </h2>
 
       {(onViewPantry || onViewShoppingList) && (
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
