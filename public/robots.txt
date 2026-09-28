@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://lardermind.com/sitemap.xml

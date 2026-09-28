@@ -323,18 +323,18 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
           <span className="font-display text-xl font-semibold text-ink">LarderMind</span>
           <ul className="flex gap-6 text-sm text-muted">
             <li>
-              <a href="#" className="hover:text-ink">
-                About
-              </a>
-            </li>
-            <li>
-              <a href="#" className="hover:text-ink">
-                Contact
-              </a>
-            </li>
-            <li>
-              <a href="#" className="hover:text-ink">
+              <a href="/legal/privacy-policy.html" className="hover:text-ink">
                 Privacy
+              </a>
+            </li>
+            <li>
+              <a href="/legal/terms-of-service.html" className="hover:text-ink">
+                Terms
+              </a>
+            </li>
+            <li>
+              <a href="mailto:support@lardermind.com" className="hover:text-ink">
+                Contact
               </a>
             </li>
           </ul>
