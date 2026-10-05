@@ -64,6 +64,7 @@ export interface StreamSendHandlers {
     onError: (message: string) => void;
     onStatus?: (status: { tool?: string; message: string }) => void;
     onInterrupt?: (response: ChatResponse) => void;
+    onSessionTitle?: (payload: { sessionId: string; title: string }) => void;
 }
 
 export const CARD_RESPONSE_TYPES: ChatResponseType[] = [
@@ -156,6 +157,21 @@ function parseSseEvent(block: string, handlers: StreamSendHandlers) {
         return;
     }
 
+    if (eventName === 'session_title') {
+        try {
+            const parsed = JSON.parse(data) as { sessionId?: string; title?: string };
+            if (parsed.sessionId?.trim() && parsed.title?.trim()) {
+                handlers.onSessionTitle?.({
+                    sessionId: parsed.sessionId.trim(),
+                    title: parsed.title.trim(),
+                });
+            }
+        } catch {
+            // ignore malformed title events
+        }
+        return;
+    }
+
     if (eventName === 'error') {
         try {
             const parsed = JSON.parse(data) as { message?: string };
@@ -180,6 +196,7 @@ async function consumeSseStream(
         onToken: handlers.onToken,
         onStatus: handlers.onStatus,
         onInterrupt: handlers.onInterrupt,
+        onSessionTitle: handlers.onSessionTitle,
         onDone: (response) => {
             receivedTerminalEvent = true;
             handlers.onDone(response);

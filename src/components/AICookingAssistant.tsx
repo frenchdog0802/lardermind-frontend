@@ -487,6 +487,31 @@ export function AICookingAssistant({
               statusText: undefined,
             }));
           },
+          onSessionTitle: ({ sessionId, title }) => {
+            setSessions((prev) => {
+              const idx = prev.findIndex((s) => s.id === sessionId);
+              if (idx === -1) {
+                return [
+                  {
+                    id: sessionId,
+                    title,
+                    isDefault: false,
+                    updatedAt: Math.floor(Date.now() / 1000),
+                    createdAt: Math.floor(Date.now() / 1000),
+                  },
+                  ...prev,
+                ];
+              }
+              return prev.map((s) => (s.id === sessionId ? { ...s, title } : s));
+            });
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('lardermind:chat-session-title', {
+                  detail: { sessionId, title },
+                }),
+              );
+            }
+          },
         },
       );
     } catch (error) {
@@ -608,19 +633,10 @@ export function AICookingAssistant({
     };
     setMessages(prevMessages => [...prevMessages, confirmationMessage]);
   };
-  // Format timestamp
-  const formatTimestamp = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   const isEmptyStage = !selectedRecipe && chatBodyMode === 'empty';
 
   const composerField = (
-    <div className="relative flex items-end rounded-[22px] border border-line bg-surface shadow-sm focus-within:ring-2 focus-within:ring-herb/30 focus-within:border-herb/40 min-h-[52px]">
+    <div className="relative flex items-end rounded-[22px] border border-line bg-surface shadow-sm focus-within:border-herb/40 min-h-[52px]">
       <textarea
         ref={inputRef}
         rows={1}
@@ -782,7 +798,7 @@ export function AICookingAssistant({
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`group flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
                     className={
@@ -942,18 +958,6 @@ export function AICookingAssistant({
                         </ul>
                       </div>
                     )}
-                    <time
-                      dateTime={new Date(message.timestamp).toISOString()}
-                      className={`block text-xs mt-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${
-                        message.role === 'user'
-                          ? 'text-white/70'
-                          : message.type === 'error'
-                            ? 'text-herb'
-                            : 'text-muted'
-                      }`}
-                    >
-                      {formatTimestamp(message.timestamp)}
-                    </time>
                   </div>
                 </div>
               ))}

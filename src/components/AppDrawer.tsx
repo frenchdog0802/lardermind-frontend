@@ -83,6 +83,33 @@ export function AppDrawer({
   }, [open, isRail, refreshSessions]);
 
   useEffect(() => {
+    const onSessionTitle = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId?: string; title?: string }>).detail;
+      const sessionId = detail?.sessionId?.trim();
+      const title = detail?.title?.trim();
+      if (!sessionId || !title) return;
+      setSessions((prev) => {
+        const idx = prev.findIndex((s) => s.id === sessionId);
+        if (idx === -1) {
+          return [
+            {
+              id: sessionId,
+              title,
+              isDefault: false,
+              updatedAt: Math.floor(Date.now() / 1000),
+              createdAt: Math.floor(Date.now() / 1000),
+            },
+            ...prev,
+          ];
+        }
+        return prev.map((s) => (s.id === sessionId ? { ...s, title } : s));
+      });
+    };
+    window.addEventListener('lardermind:chat-session-title', onSessionTitle);
+    return () => window.removeEventListener('lardermind:chat-session-title', onSessionTitle);
+  }, []);
+
+  useEffect(() => {
     if (!open || isRail) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
