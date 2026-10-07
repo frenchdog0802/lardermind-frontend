@@ -707,7 +707,7 @@ export function AICookingAssistant({
             handleSendMessage();
           }
         }}
-        className="w-full resize-none overflow-y-auto border-0 bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink focus:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
+        className="w-full resize-none overflow-y-auto border-0 bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink focus:outline-none focus-visible:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
         disabled={isTyping}
         aria-label={t('ai.title')}
       />

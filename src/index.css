@@ -73,15 +73,15 @@ h6 {
   select {
     transition: all 200ms ease;
   }
+
+  *:focus-visible {
+    outline: 2px solid var(--herb);
+    outline-offset: 2px;
+  }
 }
 
 button {
   font-family: 'Source Sans 3', system-ui, sans-serif;
-}
-
-*:focus-visible {
-  outline: 2px solid var(--herb);
-  outline-offset: 2px;
 }
 
 button,

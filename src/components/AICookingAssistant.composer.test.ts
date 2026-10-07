@@ -18,6 +18,20 @@ function composerWrapperClassName(src: string): string {
   return match[1];
 }
 
+/** Slice the first `@layer base { ... }` block (brace-balanced). */
+function extractLayerBaseBlock(css: string): string {
+  const start = css.search(/@layer\s+base\s*\{/);
+  assert.ok(start >= 0, 'expected an @layer base block in index.css');
+  let i = css.indexOf('{', start) + 1;
+  let depth = 1;
+  while (i < css.length && depth > 0) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') depth -= 1;
+    i += 1;
+  }
+  return css.slice(start, i);
+}
+
 describe('web chat composer double-border regression', () => {
   it('composer textarea clears its own border (chrome stays on wrapper)', () => {
     const src = readComposerSource();
@@ -47,6 +61,35 @@ describe('web chat composer focus-ring regression', () => {
       wrapperClass,
       /focus-within:ring-/,
       'composer wrapper must not use focus-within:ring-* (extra frame on focus)',
+    );
+  });
+});
+
+describe('web chat composer focus-outline-flash regression', () => {
+  it('global *:focus-visible outline lives in @layer base so utilities can override', () => {
+    const css = readFileSync(join(root, 'src/index.css'), 'utf8');
+    const baseBlock = extractLayerBaseBlock(css);
+    assert.match(
+      baseBlock,
+      /\*:focus-visible\s*\{[\s\S]*?outline:/,
+      '*:focus-visible outline must be inside @layer base (unlayered would beat outline-none)',
+    );
+    const focusVisibleRules = css.match(/\*:focus-visible\s*\{/g) || [];
+    assert.equal(
+      focusVisibleRules.length,
+      1,
+      'exactly one *:focus-visible rule (no leftover unlayered copy)',
+    );
+  });
+
+  it('composer textarea opts out of focus-visible outline', () => {
+    const src = readComposerSource();
+    const textareaMatch = src.match(/<textarea\b[\s\S]*?className="([^"]*)"/);
+    assert.ok(textareaMatch, 'expected a textarea with className in AICookingAssistant');
+    assert.match(
+      textareaMatch[1],
+      /\bfocus-visible:outline-none\b/,
+      'composer textarea must include focus-visible:outline-none to suppress dark outline flash',
     );
   });
 });
