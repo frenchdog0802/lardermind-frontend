@@ -88,6 +88,29 @@ interface Message {
   statusText?: string;
 }
 
+/** Compat: older cardData nested `{ recipe }`; current API uses flat fields. */
+function normalizeRecipeCardData(cardData?: ResponseCardData): ResponseCardData {
+  if (!cardData) return {};
+  const nested = (cardData as ResponseCardData & {
+    recipe?: {
+      id?: string;
+      meal_name?: string;
+      ingredients?: unknown[];
+      instructions?: string[];
+    };
+  }).recipe;
+  if (!nested || typeof nested !== 'object') return cardData;
+  return {
+    ...cardData,
+    recipeId: cardData.recipeId ?? nested.id,
+    recipeName: cardData.recipeName ?? nested.meal_name,
+    ingredientCount:
+      cardData.ingredientCount ??
+      (Array.isArray(nested.ingredients) ? nested.ingredients.length : undefined),
+    steps: cardData.steps ?? nested.instructions,
+  };
+}
+
 export function AICookingAssistant({
   isActive = true,
   pendingPrompt = null,
@@ -351,15 +374,16 @@ export function AICookingAssistant({
   };
 
   const renderRecipeCard = (message: Message, label = 'Recipe') => {
-    const steps = message.cardData?.steps ?? [];
+    const card = normalizeRecipeCardData(message.cardData);
+    const steps = card.steps ?? [];
     return (
       <div className="mt-3 bg-surface border border-line rounded-xl p-4">
-        <h3 className="font-medium text-ink">{label}: {message.cardData?.recipeName}</h3>
+        <h3 className="font-medium text-ink">{label}: {card.recipeName}</h3>
         <p className="text-sm text-muted mt-1">
-          {message.cardData?.ingredientCount ?? 0} ingredients · {steps.length} steps
+          {card.ingredientCount ?? 0} ingredients · {steps.length} steps
         </p>
-        {message.cardData?.sourceUrl && (
-          <p className="text-xs text-muted mt-1 truncate">From: {message.cardData.sourceUrl}</p>
+        {card.sourceUrl && (
+          <p className="text-xs text-muted mt-1 truncate">From: {card.sourceUrl}</p>
         )}
         {steps.length > 0 && (
           <ol className="mt-3 space-y-2 max-h-48 overflow-y-auto">
@@ -375,17 +399,52 @@ export function AICookingAssistant({
         )}
         <div className="flex gap-2 mt-3">
           <button
-            onClick={() => message.cardData?.recipeId && handleViewCreatedRecipe(message.cardData.recipeId)}
+            onClick={() => card.recipeId && handleViewCreatedRecipe(card.recipeId)}
             className="flex-1 bg-sage/40 text-ink py-2 rounded-lg text-sm"
           >
             Edit Recipe
           </button>
               <button
-                onClick={() => message.cardData?.recipeId && handleAddCreatedRecipeToMenu(message.cardData.recipeId)}
-                disabled={addingToMenuRecipeId === message.cardData?.recipeId}
+                onClick={() => card.recipeId && handleAddCreatedRecipeToMenu(card.recipeId)}
+                disabled={addingToMenuRecipeId === card.recipeId}
                 className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-60"
               >
             Add to today's dinner
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPendingApprovalCard = () => {
+    if (!pendingApproval) return null;
+    return (
+      <div className="mt-3 rounded-xl border border-line bg-surface p-4">
+        <p className="text-sm font-medium text-ink">Approve these changes?</p>
+        <ul className="mt-2 space-y-1 text-xs text-muted">
+          {pendingApproval.pendingTools.map((tool, index) => (
+            <li key={`${tool.name}-${index}`}>
+              <span className="font-medium text-ink">{tool.name}</span>
+              {tool.argsSummary ? ` — ${tool.argsSummary}` : ''}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            disabled={isTyping}
+            onClick={() => void handleResume('approve')}
+            className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-50"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={isTyping}
+            onClick={() => void handleResume('reject')}
+            className="flex-1 bg-sage/40 text-ink py-2 rounded-lg text-sm disabled:opacity-50"
+          >
+            Reject
           </button>
         </div>
       </div>
@@ -687,40 +746,6 @@ export function AICookingAssistant({
         }}
       />
 
-      {pendingApproval && (
-        <div className="shrink-0 max-w-3xl mx-auto w-full px-4 pt-3">
-          <div className="rounded-xl border border-line bg-surface p-4">
-            <p className="text-sm font-medium text-ink">Approve these changes?</p>
-            <ul className="mt-2 space-y-1 text-xs text-muted">
-              {pendingApproval.pendingTools.map((tool, index) => (
-                <li key={`${tool.name}-${index}`}>
-                  <span className="font-medium text-ink">{tool.name}</span>
-                  {tool.argsSummary ? ` — ${tool.argsSummary}` : ''}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                disabled={isTyping}
-                onClick={() => void handleResume('approve')}
-                className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-50"
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                disabled={isTyping}
-                onClick={() => void handleResume('reject')}
-                className="flex-1 bg-sage/40 text-ink py-2 rounded-lg text-sm disabled:opacity-50"
-              >
-                Reject
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {isEmptyStage ? (
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center px-4 sm:px-6 py-8">
           <div className="w-full max-w-3xl">
@@ -839,6 +864,7 @@ export function AICookingAssistant({
                         </>
                       )}
                     </div>
+                    {message.type === 'interrupt' && pendingApproval && renderPendingApprovalCard()}
                     {message.type === 'recipe_created' && message.cardData && renderRecipeCard(message)}
                     {message.type === 'recipe_imported' && message.cardData && renderRecipeCard(message, 'Imported recipe')}
                     {message.type === 'recipe_updated' && message.cardData && (
