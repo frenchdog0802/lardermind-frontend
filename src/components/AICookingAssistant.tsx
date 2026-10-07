@@ -1,11 +1,12 @@
 ﻿import { useEffect, useState, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SendIcon, ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
+import { ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { chatApi, ChatResponse, ChatSession, HistoryMessage, PendingToolSummary } from '../api/chat';
 import { mealPlanApi } from '../api/mealPlan';
 import { RecipeSuggestion } from '../api/types';
 import ChatMessageContent from './ChatMessageContent';
+import { ChatComposer } from './ChatComposer';
 import { AppHeader } from './AppHeader';
 import { ChatEmptyState, SuggestedPromptCard } from './ChatEmptyState';
 import { Loading } from './Loading';
@@ -166,16 +167,6 @@ export function AICookingAssistant({
     ? t('nav.newChat')
     : sessions.find((s) => s.id === activeSessionId)?.title?.trim() || t('nav.aiChat');
 
-  const canSend = Boolean(inputValue.trim()) && !isTyping;
-
-  // Auto-grow composer; beyond the cap the field scrolls so typed text stays visible.
-  const COMPOSER_MAX_HEIGHT_PX = 240;
-  useEffect(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    el.style.height = '0px';
-    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
-  }, [inputValue]);
   // Load sessions + history on mount
   useEffect(() => {
     const bootstrap = async () => {
@@ -695,36 +686,14 @@ export function AICookingAssistant({
   const isEmptyStage = !selectedRecipe && chatBodyMode === 'empty';
 
   const composerField = (
-    <div className="relative flex items-end rounded-[22px] border border-line bg-surface shadow-sm focus-within:border-herb/40 min-h-[52px]">
-      <textarea
-        ref={inputRef}
-        rows={1}
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-          }
-        }}
-        className="w-full resize-none overflow-y-auto border-0 bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink focus:outline-none focus-visible:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
-        disabled={isTyping}
-        aria-label={t('ai.title')}
-      />
-      <button
-        type="button"
-        onClick={handleSendMessage}
-        disabled={!canSend}
-        aria-label="Send message"
-        className={`absolute right-1.5 bottom-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-          canSend
-            ? 'bg-herb text-white hover:bg-herb-deep'
-            : 'bg-transparent text-muted'
-        }`}
-      >
-        <SendIcon size={16} />
-      </button>
-    </div>
+    <ChatComposer
+      ref={inputRef}
+      value={inputValue}
+      onChange={setInputValue}
+      onSend={handleSendMessage}
+      disabled={isTyping}
+      ariaLabel={t('ai.title')}
+    />
   );
 
   return (
