@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PlusIcon, CheckIcon, SearchIcon, TrashIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
@@ -14,17 +14,26 @@ interface ShoppingListProps {
     onOpenMenu?: () => void;
 }
 
+type ReviewDraft = {
+    id: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    selected: boolean;
+    hasIngredient: boolean;
+};
+
 export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps) {
     const { t } = useTranslation();
     const {
         shoppingList: oriShoppingList,
         ingredients,
-        // shopping list functions
         addShoppingListItem,
         updateShoppingListItem,
         removeShoppingListItem,
         fetchAllShoppingListItems,
-        fetchAllPantryItems,
+        syncShoppingItemsToPantry,
+        unsyncShoppingItemsFromPantry,
         userSettings,
     } = usePantry();
 
@@ -32,6 +41,8 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
     const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
     const [showMessage, setShowMessage] = useState(false);
     const [message, setMessage] = useState('');
+    const [undoIds, setUndoIds] = useState<string[] | null>(null);
+    const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [shoppingSearchQuery, setShoppingSearchQuery] = useState('');
     const [newShoppingItem, setNewShoppingItem] = useState({
         name: '',
@@ -42,15 +53,17 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
     const [dropdownVisible, setDropdownVisible] = useState(false);
     const [isAddingShoppingItem, setIsAddingShoppingItem] = useState(false);
     const [isCompletingAll, setIsCompletingAll] = useState(false);
-    const [selectedIndex, setSelectedIndex] = useState(-1);  // ???????????????
+    const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [showReview, setShowReview] = useState(false);
+    const [reviewDrafts, setReviewDrafts] = useState<ReviewDraft[]>([]);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [uncheckConfirmItem, setUncheckConfirmItem] = useState<ShoppingListItem | null>(null);
 
-    // Shopping item search dropdown????? name???? debounce??
     const { filteredIngredients: filteredShoppingIngredients, loading: shoppingLoading } = useSearchIngredients(
         newShoppingItem.name,
         ingredients
     );
 
-    // Auto-select if exactly one match and exact name match?? useMemo ?????????????
     const autoSelectLogic = useMemo(() => {
         if (filteredShoppingIngredients.length === 1) {
             const match = filteredShoppingIngredients[0];
@@ -63,22 +76,26 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                 setDropdownVisible(false);
             }
         }
-    }, [newShoppingItem.name, filteredShoppingIngredients]);
+    }, [newShoppingItem.name, filteredShoppingIngredients, measurementSystem]);
 
     useEffect(() => {
-        const fetchData = async () => {
-            const data = await fetchAllShoppingListItems();
-            setShoppingList(data);
-        };
-        fetchData();
+        void fetchAllShoppingListItems();
     }, []);
-
 
     useEffect(() => {
         autoSelectLogic;
     }, [autoSelectLogic]);
 
-    // Filter shopping list items
+    useEffect(() => {
+        setShoppingList(oriShoppingList);
+    }, [oriShoppingList]);
+
+    useEffect(() => {
+        return () => {
+            if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        };
+    }, []);
+
     const filteredShoppingItems = useMemo(() => {
         return shoppingList.filter(item => {
             const isEnglish = /^[\x00-\x7F]*$/.test(item.name);
@@ -88,12 +105,22 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
         });
     }, [shoppingList, shoppingSearchQuery]);
 
-    // Sync oriShoppingList to local shoppingList
-    useEffect(() => {
-        setShoppingList(oriShoppingList);
-    }, [oriShoppingList]);
+    const pendingSyncItems = useMemo(
+        () => shoppingList.filter(item => item.checked && !item.synced_to_pantry),
+        [shoppingList],
+    );
 
-    // ?????????????????
+    const showToast = (text: string, idsForUndo?: string[]) => {
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        setMessage(text);
+        setShowMessage(true);
+        setUndoIds(idsForUndo ?? null);
+        undoTimerRef.current = setTimeout(() => {
+            setShowMessage(false);
+            setUndoIds(null);
+        }, idsForUndo ? 10000 : 3000);
+    };
+
     const handleSelectIngredient = (ingredient: IngredientEntry) => {
         setNewShoppingItem({
             name: ingredient.name,
@@ -107,15 +134,12 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
 
     const handleAddShoppingItem = () => {
         if (!newShoppingItem.name.trim()) return;
-        // Check if item already exists in shopping list
         const existingItem = shoppingList.find(item => item.name.toLowerCase() === newShoppingItem.name.toLowerCase());
         if (existingItem) {
-            updateShoppingListItem({ ...existingItem, quantity: newShoppingItem.quantity });
+            void updateShoppingListItem({ ...existingItem, quantity: newShoppingItem.quantity });
         } else {
-            // Add new item
             addShoppingListItem({ ...newShoppingItem });
         }
-        // Reset form
         setNewShoppingItem({
             name: '',
             quantity: 1,
@@ -126,30 +150,47 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
         setDropdownVisible(false);
     };
 
+    const applyCheckedLocally = (id: string, checked: boolean) => {
+        setShoppingList(prevList =>
+            prevList.map(listItem =>
+                listItem.id === id ? { ...listItem, checked } : listItem
+            )
+        );
+    };
+
     const handleTogglePurchased = async (id: string) => {
         const item = shoppingList.find(i => i.id === id);
         if (!item) return;
+
+        // Unchecking a synced item needs confirmation.
+        if (item.checked && item.synced_to_pantry) {
+            setUncheckConfirmItem(item);
+            return;
+        }
+
         const updatedItem = { ...item, checked: !item.checked };
         const res = await updateShoppingListItem(updatedItem);
         if (res.success) {
-            setShoppingList(prevList =>
-                prevList.map(listItem =>
-                    listItem.id === id
-                        ? { ...listItem, checked: updatedItem.checked }
-                        : listItem
-                )
-            );
-
-            if (shoppingSearchQuery) {
-                setShoppingSearchQuery('');
+            applyCheckedLocally(id, updatedItem.checked);
+            if (shoppingSearchQuery) setShoppingSearchQuery('');
+            if (updatedItem.checked) {
+                showToast(t('shopping.purchasedOnly'));
             }
+        }
+    };
 
-            await fetchAllPantryItems();
+    const handleUncheckConfirm = async (alsoUnsync: boolean) => {
+        const item = uncheckConfirmItem;
+        setUncheckConfirmItem(null);
+        if (!item) return;
 
-            const newChecked = updatedItem.checked;
-            setMessage(newChecked ? 'Purchased! Added to your pantry.' : 'Unmarked. Quantity restored in pantry.');
-            setShowMessage(true);
-            setTimeout(() => setShowMessage(false), 3000);
+        if (alsoUnsync) {
+            await unsyncShoppingItemsFromPantry([item.id]);
+        }
+        const res = await updateShoppingListItem({ ...item, checked: false });
+        if (res.success) {
+            applyCheckedLocally(item.id, false);
+            if (shoppingSearchQuery) setShoppingSearchQuery('');
         }
     };
 
@@ -180,39 +221,84 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                         listItem.checked ? listItem : { ...listItem, checked: true }
                     )
                 );
-                if (shoppingSearchQuery) {
-                    setShoppingSearchQuery('');
-                }
-                await fetchAllPantryItems();
-                setMessage(`All ${unchecked.length} item${unchecked.length === 1 ? '' : 's'} purchased and added to your pantry.`);
-                setShowMessage(true);
-                setTimeout(() => setShowMessage(false), 3000);
+                if (shoppingSearchQuery) setShoppingSearchQuery('');
+                showToast(t('shopping.allPurchased', { count: unchecked.length }));
             } else {
                 await fetchAllShoppingListItems();
-                await fetchAllPantryItems();
-                setMessage('Some items could not be completed. Please try again.');
-                setShowMessage(true);
-                setTimeout(() => setShowMessage(false), 3000);
+                showToast('Some items could not be completed. Please try again.');
             }
         } finally {
             setIsCompletingAll(false);
         }
     };
 
+    const openReviewSheet = () => {
+        const drafts: ReviewDraft[] = pendingSyncItems.map(item => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            selected: Boolean(item.ingredient_id),
+            hasIngredient: Boolean(item.ingredient_id),
+        }));
+        setReviewDrafts(drafts);
+        setShowReview(true);
+    };
+
+    const handleConfirmSync = async () => {
+        const selected = reviewDrafts.filter(d => d.selected);
+        if (selected.length === 0) {
+            showToast(t('shopping.syncEmpty'));
+            return;
+        }
+        setIsSyncing(true);
+        try {
+            const res = await syncShoppingItemsToPantry(
+                selected.map(d => ({
+                    id: d.id,
+                    quantity: d.quantity,
+                    unit: d.unit,
+                })),
+            );
+            if (res.success && res.data) {
+                const ids = res.data.synced.map(i => i.id);
+                setShowReview(false);
+                showToast(t('shopping.syncSuccess', { n: ids.length }), ids);
+            }
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleUndoSync = async () => {
+        if (!undoIds?.length) return;
+        const ids = undoIds;
+        setUndoIds(null);
+        setShowMessage(false);
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        await unsyncShoppingItemsFromPantry(ids);
+    };
+
     return (
         <div className="flex flex-col w-full min-h-screen bg-linen">
             <AppHeader title={t('shopping.title')} onOpenMenu={onOpenMenu} />
             <div className="flex-1 overflow-y-auto">
-                {/* Main Content */}
                 <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 py-6">
-                    {/* Success Message Alert */}
                     {showMessage && (
-                        <div className="mb-4 p-3 bg-sage/50 border border-line rounded-xl text-herb-deep text-sm font-medium animate-fade-in">
-                            {message}
+                        <div className="mb-4 p-3 bg-sage/50 border border-line rounded-xl text-herb-deep text-sm font-medium animate-fade-in flex items-center justify-between gap-3">
+                            <span>{message}</span>
+                            {undoIds && (
+                                <button
+                                    type="button"
+                                    onClick={() => void handleUndoSync()}
+                                    className="shrink-0 underline font-semibold"
+                                >
+                                    {t('shopping.undo')}
+                                </button>
+                            )}
                         </div>
                     )}
 
-                    {/* Search Bar */}
                     <div className="relative mb-6">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <SearchIcon size={18} className="text-muted" />
@@ -226,7 +312,6 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                         />
                     </div>
 
-                    {/* Add New Shopping Item Button */}
                     {!isAddingShoppingItem ? (
                         <button
                             onClick={() => setIsAddingShoppingItem(true)}
@@ -247,11 +332,10 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                         const newName = e.target.value;
                                         setNewShoppingItem({ ...newShoppingItem, name: newName });
                                         setDropdownVisible(newName.length > 0);
-                                        setSelectedIndex(-1);  // ???????
+                                        setSelectedIndex(-1);
                                     }}
                                     onKeyDown={(e) => {
                                         if (!dropdownVisible || filteredShoppingIngredients.length === 0) return;
-
                                         switch (e.key) {
                                             case 'ArrowDown':
                                                 e.preventDefault();
@@ -264,10 +348,8 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                             case 'Enter':
                                                 e.preventDefault();
                                                 if (selectedIndex >= 0) {
-                                                    const selected = filteredShoppingIngredients[selectedIndex];
-                                                    handleSelectIngredient(selected);
+                                                    handleSelectIngredient(filteredShoppingIngredients[selectedIndex]);
                                                 } else if (filteredShoppingIngredients.length === 1) {
-                                                    // Fallback to auto-select
                                                     handleSelectIngredient(filteredShoppingIngredients[0]);
                                                 }
                                                 break;
@@ -286,18 +368,10 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                 {dropdownVisible && (
                                     <ul className="absolute z-30 w-full bg-surface border border-line rounded-lg shadow-lg max-h-40 overflow-y-auto mt-1">
                                         {shoppingLoading ? (
-                                            <li className="p-3 text-center text-muted text-sm flex items-center justify-center">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
-                                                Loading...
-                                            </li>
+                                            <li className="p-3 text-center text-muted text-sm">Loading...</li>
                                         ) : filteredShoppingIngredients.length > 0 ? (
                                             filteredShoppingIngredients.map((ingredient: IngredientEntry, index: number) => {
                                                 const isSelected = index === selectedIndex;
-                                                const query = newShoppingItem.name.toLowerCase();
-                                                const highlightedName = ingredient.name.replace(
-                                                    new RegExp(`(${query})`, 'gi'),
-                                                    '<mark class="bg-yellow-200">$1</mark>'
-                                                );
                                                 return (
                                                     <li key={ingredient.id} className={`p-3 ${isSelected ? 'bg-sage/50' : 'hover:bg-sage/50'}`}>
                                                         <button
@@ -307,8 +381,9 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                                                 handleSelectIngredient(ingredient);
                                                             }}
                                                             className={`w-full text-left ${isSelected ? 'font-medium' : ''}`}
-                                                            dangerouslySetInnerHTML={{ __html: highlightedName + ` <span class="text-sm text-muted">(${ingredient.default_display_unit || ingredient.default_unit || ''})</span>` }}
-                                                        />
+                                                        >
+                                                            {ingredient.name}
+                                                        </button>
                                                     </li>
                                                 );
                                             })
@@ -367,12 +442,22 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                         </div>
                     )}
 
+                    {pendingSyncItems.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={openReviewSheet}
+                            className="w-full mb-4 flex items-center justify-center gap-2 bg-herb text-white font-medium py-3 px-4 rounded-xl shadow-sm hover:bg-herb-deep transition-colors"
+                        >
+                            {t('shopping.syncToPantry', { n: pendingSyncItems.length })}
+                        </button>
+                    )}
+
                     <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
                         <div className="p-4 border-b border-line bg-linen flex items-center justify-between gap-3">
                             <h2 className="font-semibold text-ink">{t('shopping.itemsToBuy')}</h2>
                             <button
                                 type="button"
-                                onClick={handleCompleteAll}
+                                onClick={() => void handleCompleteAll()}
                                 disabled={uncheckedCount === 0 || isCompletingAll}
                                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                                     uncheckedCount === 0 || isCompletingAll
@@ -382,7 +467,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                 aria-label="Complete all items"
                             >
                                 <CheckIcon size={14} />
-                                {isCompletingAll ? 'Completing?' : 'Complete all'}
+                                {isCompletingAll ? 'Completing…' : 'Complete all'}
                             </button>
                         </div>
                         {filteredShoppingItems.length === 0 ? (
@@ -398,7 +483,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                     <li key={item.id} className={`px-4 py-3.5 ${item.checked ? 'bg-linen' : ''}`}>
                                         <div className="flex items-center gap-3">
                                             <button
-                                                onClick={() => handleTogglePurchased(item.id)}
+                                                onClick={() => void handleTogglePurchased(item.id)}
                                                 className={`w-5 h-5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${item.checked ? 'bg-sage/500 border-green-500' : 'border-line hover:border-gray-400'}`}
                                                 aria-label={item.checked ? 'Mark as not purchased' : 'Mark as purchased'}
                                             >
@@ -416,6 +501,17 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                                     measurementSystem={measurementSystem}
                                                 />
                                             </div>
+                                            {item.checked && (
+                                                <span className={`text-xs shrink-0 px-2 py-0.5 rounded-full ${
+                                                    item.synced_to_pantry
+                                                        ? 'bg-sage/60 text-herb-deep'
+                                                        : 'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                    {item.synced_to_pantry
+                                                        ? t('shopping.syncedToPantry')
+                                                        : t('shopping.pendingSync')}
+                                                </span>
+                                            )}
                                             <button
                                                 onClick={() => handleRemoveShoppingItem(item.id)}
                                                 className="p-1.5 flex-shrink-0 rounded-full hover:bg-sage/50 text-muted hover:text-herb transition-colors"
@@ -431,6 +527,114 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                     </div>
                 </main>
             </div>
+
+            {showReview && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+                    <div className="bg-surface w-full max-w-lg rounded-2xl shadow-xl border border-line max-h-[85vh] flex flex-col">
+                        <div className="p-4 border-b border-line">
+                            <h3 className="font-semibold text-ink text-lg">{t('shopping.syncReviewTitle')}</h3>
+                            <p className="text-sm text-muted mt-1">{t('shopping.syncNonFoodHint')}</p>
+                        </div>
+                        <ul className="overflow-y-auto flex-1 divide-y divide-line">
+                            {reviewDrafts.map((draft, idx) => (
+                                <li key={draft.id} className="p-4 flex items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={draft.selected}
+                                        onChange={e => {
+                                            const selected = e.target.checked;
+                                            setReviewDrafts(prev =>
+                                                prev.map((d, i) => (i === idx ? { ...d, selected } : d))
+                                            );
+                                        }}
+                                        className="mt-1"
+                                    />
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                        <div className="font-medium text-ink capitalize">{draft.name}</div>
+                                        {!draft.hasIngredient && (
+                                            <div className="text-xs text-muted">{t('shopping.syncNonFoodHint')}</div>
+                                        )}
+                                        <div className="flex gap-2">
+                                            <NumberInput
+                                                min={0.1}
+                                                step={0.5}
+                                                value={draft.quantity}
+                                                onChange={value =>
+                                                    setReviewDrafts(prev =>
+                                                        prev.map((d, i) => (i === idx ? { ...d, quantity: value } : d))
+                                                    )
+                                                }
+                                                className="w-1/3 p-2 rounded-lg"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={draft.unit}
+                                                onChange={e => {
+                                                    const unit = e.target.value;
+                                                    setReviewDrafts(prev =>
+                                                        prev.map((d, i) => (i === idx ? { ...d, unit } : d))
+                                                    );
+                                                }}
+                                                className="w-2/3 p-2 border border-line rounded-lg"
+                                                aria-label={t('shopping.unit')}
+                                            />
+                                        </div>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="p-4 border-t border-line flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowReview(false)}
+                                className="flex-1 py-2.5 rounded-xl bg-sage/40 text-ink font-medium"
+                                disabled={isSyncing}
+                            >
+                                {t('shopping.syncCancel')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void handleConfirmSync()}
+                                className="flex-1 py-2.5 rounded-xl bg-herb text-white font-medium disabled:opacity-50"
+                                disabled={isSyncing || reviewDrafts.every(d => !d.selected)}
+                            >
+                                {t('shopping.syncConfirm')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {uncheckConfirmItem && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                    <div className="bg-surface w-full max-w-sm rounded-2xl shadow-xl border border-line p-5 space-y-4">
+                        <p className="text-ink">{t('shopping.uncheckSyncedConfirm')}</p>
+                        <div className="flex flex-col gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void handleUncheckConfirm(true)}
+                                className="w-full py-2.5 rounded-xl bg-herb text-white font-medium"
+                            >
+                                {t('shopping.uncheckSyncedYes')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void handleUncheckConfirm(false)}
+                                className="w-full py-2.5 rounded-xl bg-sage/40 text-ink font-medium"
+                            >
+                                {t('shopping.uncheckSyncedNo')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setUncheckConfirmItem(null)}
+                                className="w-full py-2 text-muted text-sm"
+                            >
+                                {t('shopping.syncCancel')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

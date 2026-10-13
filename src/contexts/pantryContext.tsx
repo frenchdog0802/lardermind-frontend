@@ -4,7 +4,13 @@ import { recipeApi } from '../api/recipes';
 import { folderApi } from '../api/folder';
 import { PantryItemApi, parsePantryItem, parsePantryItems } from '../api/pantryItem';
 import { ingredientApi } from "../api/ingredient";
-import { parseShoppingListItem, parseShoppingListItems, shoppingListApi } from '../api/shoppingList';
+import {
+  parseShoppingListItem,
+  parseShoppingListItems,
+  parseSyncResult,
+  parseUnsyncResult,
+  shoppingListApi,
+} from '../api/shoppingList';
 import { mealPlanApi } from '../api/mealPlan';
 import { userPreferencesApi } from '../api/userPreferences';
 import { resolveStoredLanguage } from '../i18n';
@@ -122,6 +128,12 @@ interface PantryContextType {
   updateShoppingListItem: (item: ShoppingListItem) => Promise<ApiResponse<ShoppingListItem>>;
   addShoppingListItem: (item: Omit<ShoppingListItem, 'id'>) => void;
   removeShoppingListItem?: (id: string) => void;
+  syncShoppingItemsToPantry: (
+    items: Array<{ id: string; quantity?: number; unit?: string }>,
+  ) => Promise<ApiResponse<{ synced: ShoppingListItem[]; skipped: Array<{ id: string; reason: string }> }>>;
+  unsyncShoppingItemsFromPantry: (
+    itemIds: string[],
+  ) => Promise<ApiResponse<{ unsynced: ShoppingListItem[]; skipped: Array<{ id: string; reason: string }> }>>;
 
   // meal plans
   mealPlan: MealPlan[];
@@ -432,6 +444,50 @@ export function PantryProvider({
     shoppingListApi.delete(id);
   };
 
+  const syncShoppingItemsToPantry = async (
+    items: Array<{ id: string; quantity?: number; unit?: string }>,
+  ) => {
+    const response = await shoppingListApi.syncToPantry(items);
+    if (response.success && response.data) {
+      const result = parseSyncResult(response.data);
+      const byId = new Map(result.synced.map(i => [i.id, i]));
+      setShoppingList(prev =>
+        prev.map(item => {
+          const synced = byId.get(item.id);
+          return synced ? { ...item, ...synced, synced_to_pantry: true } : item;
+        }),
+      );
+      await fetchAllPantryItems();
+      return { ...response, data: result };
+    }
+    return response as ApiResponse<{
+      synced: ShoppingListItem[];
+      skipped: Array<{ id: string; reason: string }>;
+    }>;
+  };
+
+  const unsyncShoppingItemsFromPantry = async (itemIds: string[]) => {
+    const response = await shoppingListApi.unsyncFromPantry(itemIds);
+    if (response.success && response.data) {
+      const result = parseUnsyncResult(response.data);
+      const byId = new Map(result.unsynced.map(i => [i.id, i]));
+      setShoppingList(prev =>
+        prev.map(item => {
+          const unsynced = byId.get(item.id);
+          return unsynced
+            ? { ...item, ...unsynced, synced_to_pantry: false }
+            : item;
+        }),
+      );
+      await fetchAllPantryItems();
+      return { ...response, data: result };
+    }
+    return response as ApiResponse<{
+      unsynced: ShoppingListItem[];
+      skipped: Array<{ id: string; reason: string }>;
+    }>;
+  };
+
   // meal plan functions
   const fetchAllMealPlans = async () => {
     setMealPlansLoading(true);
@@ -566,6 +622,8 @@ export function PantryProvider({
     updateShoppingListItem,
     addShoppingListItem,
     removeShoppingListItem,
+    syncShoppingItemsToPantry,
+    unsyncShoppingItemsFromPantry,
     mealPlan,
     mealPlansLoading,
     fetchAllMealPlans,

@@ -1,20 +1,41 @@
 import { api } from './client';
-import { ShoppingListItem } from './types';
+import {
+    ShoppingListItem,
+    SyncToPantryItemInput,
+    SyncToPantryResult,
+    UnsyncFromPantryResult,
+} from './types';
 
 type ShoppingListItemDto = {
     id?: string;
     name?: string;
+    quantity?: number;
+    unit?: string;
+    checked?: boolean;
+    synced_to_pantry?: boolean;
+    ingredient_id?: string;
     details?: Partial<ShoppingListItem> & Record<string, unknown>;
 };
 
 function fromDto(dto: ShoppingListItemDto): ShoppingListItem {
     const details = dto.details ?? {};
+    const synced =
+        dto.synced_to_pantry ??
+        (details.synced_to_pantry as boolean | undefined) ??
+        false;
     return {
         id: String(dto.id ?? details.id ?? ''),
         name: String(dto.name ?? details.name ?? ''),
-        quantity: Number(details.quantity ?? 0),
-        unit: String(details.unit ?? ''),
-        checked: Boolean(details.checked ?? false),
+        quantity: Number(dto.quantity ?? details.quantity ?? 0),
+        unit: String(dto.unit ?? details.unit ?? ''),
+        checked: Boolean(dto.checked ?? details.checked ?? false),
+        synced_to_pantry: Boolean(synced),
+        ingredient_id:
+            dto.ingredient_id != null
+                ? String(dto.ingredient_id)
+                : details.ingredient_id != null
+                  ? String(details.ingredient_id)
+                  : undefined,
     };
 }
 
@@ -51,6 +72,32 @@ export function parseShoppingListItem(data: unknown): ShoppingListItem | null {
     return fromDto(obj as ShoppingListItemDto);
 }
 
+function parseSyncResult(data: unknown): SyncToPantryResult {
+    const root = (data && typeof data === 'object' ? data : {}) as {
+        synced?: unknown;
+        skipped?: unknown;
+    };
+    return {
+        synced: parseShoppingListItems(root.synced ?? []),
+        skipped: Array.isArray(root.skipped)
+            ? (root.skipped as Array<{ id: string; reason: string }>)
+            : [],
+    };
+}
+
+function parseUnsyncResult(data: unknown): UnsyncFromPantryResult {
+    const root = (data && typeof data === 'object' ? data : {}) as {
+        unsynced?: unknown;
+        skipped?: unknown;
+    };
+    return {
+        unsynced: parseShoppingListItems(root.unsynced ?? []),
+        skipped: Array.isArray(root.skipped)
+            ? (root.skipped as Array<{ id: string; reason: string }>)
+            : [],
+    };
+}
+
 export const shoppingListApi = {
     list: (query?: string) =>
         api.get<unknown>(query ? `/api/shopping-list?query=${encodeURIComponent(query)}` : '/api/shopping-list'),
@@ -64,4 +111,14 @@ export const shoppingListApi = {
         api.put<unknown>(`/api/shopping-list/${id}`, toRequestPayload(data)),
 
     delete: (id: string | number) => api.delete<void>(`/api/shopping-list/${id}`),
+
+    syncToPantry: (items: SyncToPantryItemInput[]) =>
+        api.post<unknown>('/api/shopping-list/sync-to-pantry', { items }),
+
+    unsyncFromPantry: (itemIds: string[]) =>
+        api.post<unknown>('/api/shopping-list/unsync-from-pantry', {
+            item_ids: itemIds,
+        }),
 };
+
+export { parseSyncResult, parseUnsyncResult };

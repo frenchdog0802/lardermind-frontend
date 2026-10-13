@@ -75,10 +75,28 @@ export type ShoppingListItem = {
     quantity: number;
     unit: string;
     checked: boolean;
+    /** True when quantity has been merged into pantry via batch sync. */
+    synced_to_pantry?: boolean;
     ingredient_id?: string;
     unit_kind?: string;
     base_unit?: string;
     default_display_unit?: string;
+};
+
+export type SyncToPantryItemInput = {
+    id: string;
+    quantity?: number;
+    unit?: string;
+};
+
+export type SyncToPantryResult = {
+    synced: ShoppingListItem[];
+    skipped: Array<{ id: string; reason: string }>;
+};
+
+export type UnsyncFromPantryResult = {
+    unsynced: ShoppingListItem[];
+    skipped: Array<{ id: string; reason: string }>;
 };
 
 
@@ -125,6 +143,19 @@ export interface ConfirmMealPlanResult {
         unit: string;
     }>;
     alreadyConfirmed: boolean;
+}
+
+export type MealAvailabilityStatus = 'ok' | 'short' | 'unknown';
+
+export interface MealAvailabilityEntry {
+    meal_plan_id: string;
+    status: MealAvailabilityStatus;
+    shortages: MealConfirmShortage[];
+}
+
+export interface MealPlanAvailabilityResult {
+    meals: MealAvailabilityEntry[];
+    weekShortages: MealConfirmShortage[];
 }
 
 export interface RecipeSuggestion {
