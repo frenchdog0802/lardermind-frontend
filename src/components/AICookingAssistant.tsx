@@ -184,9 +184,8 @@ export function AICookingAssistant({
         console.error('Failed to load chat sessions', error);
         try {
           const response = await chatApi.getHistory();
-          if (response.success && response.data?.messages?.length) {
-            setActiveSessionId(response.data.sessionId ?? null);
-            setMessages(mapHistory(response.data.messages));
+          if (response.success && response.data?.sessionId) {
+            await loadHistoryForSession(response.data.sessionId);
           }
         } catch (historyError) {
           console.error('Failed to load chat history', historyError);
@@ -220,12 +219,56 @@ export function AICookingAssistant({
       };
     });
 
+  const withRestoredInterruptMessage = (
+    messages: Message[],
+    hasPending: boolean,
+  ): Message[] => {
+    if (!hasPending || messages.some((m) => m.type === 'interrupt')) {
+      return messages;
+    }
+    // Older interrupts were not persisted; ensure a row exists for Approve UI.
+    return [
+      ...messages,
+      {
+        id: `interrupt-restored-${Date.now()}`,
+        role: 'assistant',
+        content: 'I need your approval before making these changes.',
+        timestamp: Date.now(),
+        type: 'interrupt' as MessageType,
+      },
+    ];
+  };
+
   const loadHistoryForSession = async (sessionId: string) => {
     const response = await chatApi.getHistory(sessionId);
-    if (response.success && response.data?.messages?.length) {
-      setMessages(mapHistory(response.data.messages));
-    } else {
+    if (!response.success || !response.data) {
       setMessages([]);
+      setPendingApproval(null);
+      return;
+    }
+    const sid = response.data.sessionId ?? sessionId;
+    const pending = response.data.pendingInterrupt;
+    const hasPending = Boolean(pending?.pendingTools?.length);
+    const mapped = response.data.messages?.length
+      ? mapHistory(response.data.messages)
+      : [];
+    setMessages(withRestoredInterruptMessage(mapped, hasPending));
+    if (hasPending && pending) {
+      setPendingApproval({ sessionId: sid, pendingTools: pending.pendingTools });
+    } else {
+      setPendingApproval(null);
+    }
+  };
+
+  const restorePendingApproval = async (sessionId: string) => {
+    try {
+      const response = await chatApi.getHistory(sessionId);
+      const pending = response.data?.pendingInterrupt;
+      if (!response.success || !pending?.pendingTools?.length) return;
+      setPendingApproval({ sessionId, pendingTools: pending.pendingTools });
+      setMessages((prev) => withRestoredInterruptMessage(prev, true));
+    } catch (error) {
+      console.error('Failed to restore pending approval', error);
     }
   };
 
@@ -455,7 +498,6 @@ export function AICookingAssistant({
 
     setMessages(prev => [...prev, streamingMessage]);
     setIsTyping(true);
-    setPendingApproval(null);
     let settled = false;
 
     const settleStreaming = (updater: (message: Message) => Message) => {
@@ -529,13 +571,22 @@ export function AICookingAssistant({
             setSuggestedRecipes([]);
           },
           onError: (message) => {
+            const errorText =
+              message ||
+              "I'm sorry, I'm having trouble connecting to my cooking brain right now. Please try again in a moment.";
             settleStreaming((entry) => ({
               ...entry,
               type: 'error',
-              content: message || "I'm sorry, I'm having trouble connecting to my cooking brain right now. Please try again in a moment.",
+              content: errorText,
               streaming: false,
               statusText: undefined,
             }));
+            if (
+              /pending action waiting for your approval/i.test(errorText) &&
+              activeSessionId
+            ) {
+              void restorePendingApproval(activeSessionId);
+            }
           },
           onSessionTitle: ({ sessionId, title }) => {
             setSessions((prev) => {
@@ -641,7 +692,7 @@ export function AICookingAssistant({
   };
   // Handle sending a message
   const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || isTyping || pendingApproval) return;
     markSetupGuideChatStarted();
     // Add user message
     const userMessage: Message = {
@@ -691,7 +742,7 @@ export function AICookingAssistant({
       value={inputValue}
       onChange={setInputValue}
       onSend={handleSendMessage}
-      disabled={isTyping}
+      disabled={isTyping || Boolean(pendingApproval)}
       ariaLabel={t('ai.title')}
     />
   );
@@ -807,9 +858,9 @@ export function AICookingAssistant({
                       {message.streaming && !message.content ? (
                         <div className="space-y-2">
                           <div className="flex space-x-1.5 py-1">
-                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-bounce [animation-delay:0ms]" />
-                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-bounce [animation-delay:150ms]" />
-                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-bounce [animation-delay:300ms]" />
+                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-typing-dot [animation-delay:0ms]" />
+                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-typing-dot [animation-delay:120ms]" />
+                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-typing-dot [animation-delay:240ms]" />
                           </div>
                           {message.statusText && (
                             <p className="text-xs text-muted">{message.statusText}</p>

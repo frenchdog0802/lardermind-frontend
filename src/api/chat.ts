@@ -17,9 +17,26 @@ export type ChatResponseType =
 export interface ChatRequest {
     message: string;
     sessionId?: string;
+    /** Device local calendar date YYYY-MM-DD for agent “today”. */
+    clientLocalDate?: string;
     recipeContext?: {
         recipeId: string;
         recipeName: string;
+    };
+}
+
+function localCalendarDate(): string {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function withClientLocalDate(data: ChatRequest): ChatRequest {
+    return {
+        ...data,
+        clientLocalDate: data.clientLocalDate ?? localCalendarDate(),
     };
 }
 
@@ -56,6 +73,10 @@ export interface HistoryMessage {
     createdAt: number;
     responseType?: string;
     cardData?: Record<string, unknown>;
+}
+
+export interface HistoryPendingInterrupt {
+    pendingTools: PendingToolSummary[];
 }
 
 export interface StreamSendHandlers {
@@ -243,7 +264,8 @@ async function consumeSseStream(
 }
 
 export const chatApi = {
-    send: (data: ChatRequest) => api.post<ChatResponse>('/api/chat/send', data),
+    send: (data: ChatRequest) =>
+        api.post<ChatResponse>('/api/chat/send', withClientLocalDate(data)),
     resume: (data: ChatResumeRequest) =>
         api.post<ChatResponse>('/api/chat/resume', data),
     streamSend: async (data: ChatRequest, handlers: StreamSendHandlers, signal?: AbortSignal) => {
@@ -255,7 +277,7 @@ export const chatApi = {
                 Accept: 'text/event-stream',
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify(data),
+            body: JSON.stringify(withClientLocalDate(data)),
             signal,
         });
 
@@ -280,7 +302,11 @@ export const chatApi = {
     deleteSession: (id: string) =>
         api.delete<{ deleted: boolean }>(`/api/chat/sessions/${id}`),
     getHistory: (sessionId?: string) =>
-        api.get<{ sessionId: string; messages: HistoryMessage[] }>(
+        api.get<{
+            sessionId: string;
+            messages: HistoryMessage[];
+            pendingInterrupt?: HistoryPendingInterrupt;
+        }>(
             sessionId
                 ? `/api/chat/history?sessionId=${encodeURIComponent(sessionId)}`
                 : '/api/chat/history',
