@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/authContext';
 import { usePantry } from '../contexts/pantryContext';
+import { buyChipCount, pantryChipCount } from '../utils/chatEmptyChipCounts';
 import { greetingPeriodNow } from '../utils/chatGreeting';
 
 export type SuggestedPromptCard = {
@@ -26,7 +28,22 @@ export function ChatEmptyState({
 }: ChatEmptyStateProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { pantryItems, shoppingList } = usePantry();
+  const {
+    pantryItems,
+    shoppingList,
+    fetchAllPantryItems,
+    fetchAllShoppingListItems,
+  } = usePantry();
+
+  const showChips = Boolean(onViewPantry || onViewShoppingList);
+
+  useEffect(() => {
+    if (!showChips) return;
+    void fetchAllPantryItems();
+    void fetchAllShoppingListItems();
+    // Context fetch fns are new each render; load once when chips are shown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount/showChips only
+  }, [showChips]);
 
   const period = greetingPeriodNow(now);
   const greetingKey =
@@ -41,10 +58,8 @@ export function ChatEmptyState({
     ? t('ai.greetingHi', { name: displayName })
     : t(greetingKey);
 
-  const pantryCount = Array.isArray(pantryItems) ? pantryItems.length : 0;
-  const buyCount = (Array.isArray(shoppingList) ? shoppingList : []).filter(
-    (item) => !item.checked,
-  ).length;
+  const pantryCount = pantryChipCount(pantryItems);
+  const buyCount = buyChipCount(shoppingList);
 
   const cards = suggestedPromptCards.filter(
     (card) =>
@@ -61,7 +76,7 @@ export function ChatEmptyState({
         {headline}
       </h2>
 
-      {(onViewPantry || onViewShoppingList) && (
+      {showChips ? (
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           {onViewPantry ? (
             <button
@@ -82,7 +97,7 @@ export function ChatEmptyState({
             </button>
           ) : null}
         </div>
-      )}
+      ) : null}
 
       {cards.length > 0 && onSelectPrompt ? (
         <div
