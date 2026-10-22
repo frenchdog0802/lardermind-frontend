@@ -7,6 +7,7 @@ import useSearchIngredients from '../hooks/useSearchIngredient';
 import { NumberInput } from './NumberInput';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
 import { AppHeader } from './AppHeader';
+import { isAscii } from '../utils/isAscii';
 import type { MeasurementSystem } from '../utils/units';
 
 interface PantryInventoryProps {
@@ -69,7 +70,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventory
         return pantryItems.filter(item => {
             const name = item.name ?? '';
             if (!name) return !searchQuery;
-            const isEnglish = /^[\x00-\x7F]*$/.test(name);
+            const isEnglish = isAscii(name);
             const matchesSearch = isEnglish
                 ? name.toLowerCase().includes(searchQuery.toLowerCase())
                 : name.includes(searchQuery);

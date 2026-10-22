@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { chatApi, ChatResponse, ChatSession, HistoryMessage, PendingToolSummary } from '../api/chat';
+import { classifyChatResume, readInterruptId } from '../api/resumeOutcome';
 import { mealPlanApi } from '../api/mealPlan';
 import { RecipeSuggestion } from '../api/types';
 import ChatMessageContent from './ChatMessageContent';
@@ -145,7 +146,10 @@ export function AICookingAssistant({
   const [pendingApproval, setPendingApproval] = useState<{
     sessionId: string;
     pendingTools: PendingToolSummary[];
+    interruptId?: string;
   } | null>(null);
+  const [resumeInFlight, setResumeInFlight] = useState(false);
+  const resumeLock = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -254,7 +258,11 @@ export function AICookingAssistant({
       : [];
     setMessages(withRestoredInterruptMessage(mapped, hasPending));
     if (hasPending && pending) {
-      setPendingApproval({ sessionId: sid, pendingTools: pending.pendingTools });
+      setPendingApproval({
+        sessionId: sid,
+        pendingTools: pending.pendingTools,
+        interruptId: pending.interruptId,
+      });
     } else {
       setPendingApproval(null);
     }
@@ -265,7 +273,11 @@ export function AICookingAssistant({
       const response = await chatApi.getHistory(sessionId);
       const pending = response.data?.pendingInterrupt;
       if (!response.success || !pending?.pendingTools?.length) return;
-      setPendingApproval({ sessionId, pendingTools: pending.pendingTools });
+      setPendingApproval({
+        sessionId,
+        pendingTools: pending.pendingTools,
+        interruptId: pending.interruptId,
+      });
       setMessages((prev) => withRestoredInterruptMessage(prev, true));
     } catch (error) {
       console.error('Failed to restore pending approval', error);
@@ -466,7 +478,7 @@ export function AICookingAssistant({
         <div className="mt-3 flex gap-2">
           <button
             type="button"
-            disabled={isTyping}
+            disabled={resumeInFlight}
             onClick={() => void handleResume('approve')}
             className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-50"
           >
@@ -474,7 +486,7 @@ export function AICookingAssistant({
           </button>
           <button
             type="button"
-            disabled={isTyping}
+            disabled={resumeInFlight}
             onClick={() => void handleResume('reject')}
             className="flex-1 bg-sage/40 text-ink py-2 rounded-lg text-sm disabled:opacity-50"
           >
@@ -531,7 +543,11 @@ export function AICookingAssistant({
               (response.data?.sessionId as string | undefined) ??
               activeSessionId ??
               '';
-            setPendingApproval({ sessionId, pendingTools: tools });
+            setPendingApproval({
+              sessionId,
+              pendingTools: tools,
+              interruptId: readInterruptId(response.data),
+            });
             settleStreaming((message) => ({
               ...message,
               type: 'interrupt',
@@ -547,7 +563,11 @@ export function AICookingAssistant({
                 (response.data?.sessionId as string | undefined) ??
                 activeSessionId ??
                 '';
-              setPendingApproval({ sessionId, pendingTools: tools });
+              setPendingApproval({
+                sessionId,
+                pendingTools: tools,
+                interruptId: readInterruptId(response.data),
+              });
               settleStreaming((message) => ({
                 ...message,
                 type: 'interrupt',
@@ -637,38 +657,88 @@ export function AICookingAssistant({
     }
   };
 
+  const pushAssistantNote = (content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `assistant-note-${Date.now()}`,
+        role: 'assistant',
+        type: 'error',
+        content,
+        timestamp: Date.now(),
+      },
+    ]);
+  };
+
   const handleResume = async (decision: 'approve' | 'reject') => {
-    if (!pendingApproval) return;
-    setIsTyping(true);
+    if (!pendingApproval || resumeLock.current) return;
+    const approval = pendingApproval;
+    resumeLock.current = true;
+    setResumeInFlight(true);
     try {
       const response = await chatApi.resume({
-        sessionId: pendingApproval.sessionId,
+        sessionId: approval.sessionId,
         decision,
+        ...(approval.interruptId ? { interruptId: approval.interruptId } : {}),
       });
+      const outcome = classifyChatResume(response);
+      if (outcome.kind === 'expired') {
+        setPendingApproval(null);
+        pushAssistantNote(t('ai.approvalExpired'));
+        return;
+      }
+      if (outcome.kind === 'interrupt_mismatch' || outcome.kind === 'target_missing') {
+        await loadHistoryForSession(approval.sessionId);
+        pushAssistantNote(
+          t(outcome.kind === 'interrupt_mismatch' ? 'ai.approvalMismatch' : 'ai.approvalTargetMissing'),
+        );
+        return;
+      }
+      if (outcome.kind === 'resume_in_progress') {
+        pushAssistantNote(t('ai.approvalInProgress'));
+        return;
+      }
+      if (outcome.kind === 'tool_args_invalid') {
+        setPendingApproval(null);
+        pushAssistantNote(t('ai.approvalInvalid'));
+        return;
+      }
+      if (outcome.kind === 'no_pending_action') {
+        setPendingApproval(null);
+        await loadHistoryForSession(approval.sessionId);
+        pushAssistantNote(t('ai.approvalNone'));
+        return;
+      }
+      if (outcome.kind === 'failed' || !response.success || !response.data) {
+        pushAssistantNote(response.message || t('ai.approvalFailed'));
+        return;
+      }
+
       setPendingApproval(null);
-      if (response.success && response.data) {
-        const finalized = mapResponseToMessage(response.data);
-        setMessages((prev) => [...prev, finalized]);
-        if (finalized.type && finalized.type !== 'text' && finalized.type !== 'error' && finalized.type !== 'interrupt') {
-          await refreshAfterAgentAction(finalized.type);
-        }
-        if (response.data.type === 'interrupt') {
-          const tools = (response.data.data?.pendingTools as PendingToolSummary[] | undefined) ?? [];
-          setPendingApproval({
-            sessionId: pendingApproval.sessionId,
-            pendingTools: tools,
-          });
-        }
+      const finalized = mapResponseToMessage(response.data);
+      setMessages((prev) => [...prev, finalized]);
+      if (finalized.type && finalized.type !== 'text' && finalized.type !== 'error' && finalized.type !== 'interrupt') {
+        await refreshAfterAgentAction(finalized.type);
+      }
+      if (response.data.type === 'interrupt') {
+        const tools = (response.data.data?.pendingTools as PendingToolSummary[] | undefined) ?? [];
+        setPendingApproval({
+          sessionId: approval.sessionId,
+          pendingTools: tools,
+          interruptId: readInterruptId(response.data.data),
+        });
       }
     } catch (error) {
       console.error('Chat resume failed', error);
+      pushAssistantNote(t('ai.approvalFailed'));
     } finally {
-      setIsTyping(false);
+      resumeLock.current = false;
+      setResumeInFlight(false);
     }
   };
 
   const handleSwitchSession = async (sessionId: string) => {
-    if (sessionId === activeSessionId || isTyping) return;
+    if (sessionId === activeSessionId || isTyping || resumeInFlight) return;
     setActiveSessionId(sessionId);
     setPendingApproval(null);
     await loadHistoryForSession(sessionId);
@@ -762,7 +832,7 @@ export function AICookingAssistant({
         title={headerTitle}
         onOpenMenu={onOpenMenu}
         onNewChat={() => {
-          if (!isTyping) void handleNewSession();
+          if (!isTyping && !resumeInFlight) void handleNewSession();
         }}
       />
 

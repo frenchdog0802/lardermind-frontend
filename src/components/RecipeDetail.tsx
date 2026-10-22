@@ -14,11 +14,10 @@ export function RecipeDetail({
 }: RecipeDetailProps) {
   const {
     pantryItems,
-    updatePantryItems,
     userSettings,
   } = usePantry();
   const measurementSystem = (userSettings.measurement_unit === 'imperial' ? 'imperial' : 'metric') as MeasurementSystem;
-  const [cooked, setCooked] = useState(false);
+  const [cooked] = useState(false);
   const checkIngredientAvailability = (ingredient: IngredientEntry) => {
     const pantryItem = pantryItems.find(item => item.name.toLowerCase() === ingredient.name.toLowerCase());
     if (!pantryItem) return 'missing';

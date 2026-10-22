@@ -44,6 +44,8 @@ export interface ChatResumeRequest {
     sessionId: string;
     decision: 'approve' | 'reject';
     note?: string;
+    /** Id of the approval card the user is looking at. Omit to act on the current pending action. */
+    interruptId?: string;
 }
 
 export interface ChatResponse {
@@ -77,6 +79,9 @@ export interface HistoryMessage {
 
 export interface HistoryPendingInterrupt {
     pendingTools: PendingToolSummary[];
+    interruptId?: string;
+    /** Unix seconds. Pending actions older than 20 minutes are expired. */
+    expiresAt?: number;
 }
 
 export interface StreamSendHandlers {
@@ -233,7 +238,7 @@ async function consumeSseStream(
     };
 
     try {
-        while (true) {
+        for (;;) {
             if (signal?.aborted) {
                 await reader.cancel();
                 throw new DOMException('Stream aborted', 'AbortError');

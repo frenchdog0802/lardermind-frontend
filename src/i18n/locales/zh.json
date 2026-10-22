@@ -224,6 +224,8 @@
     "syncCancel": "取消",
     "purchasedOnly": "已標記為已購買",
     "allPurchased": "已標記 {{count}} 項為已購買",
+    "versionConflict": "此項目已在別處更新，已顯示最新內容。",
+    "completeFailed": "有些項目無法完成，請再試一次。",
     "syncOffline": "目前離線 - 變更會先存在本裝置",
     "syncEmpty": "請至少選擇一項",
     "quantity": "數量",
@@ -309,6 +311,13 @@
       "幫我規劃這週剩下的晚餐",
       "把雞胸肉、米和花椰菜加入冰箱"
     ],
+    "approvalExpired": "這項確認已過期，請再問一次。",
+    "approvalMismatch": "這項確認與目前對話不符，我已重新整理對話。",
+    "approvalTargetMissing": "有些項目已經不在了，所以沒有變更。我已重新整理對話。",
+    "approvalInProgress": "這項確認正在處理中。",
+    "approvalInvalid": "這些變更無法套用，請再問一次。",
+    "approvalNone": "目前沒有待確認的操作。",
+    "approvalFailed": "無法送出這個決定，請再試一次。",
     "demoFallback": "好問題！免費註冊後，就能依你的冰箱、家人偏好與行程拿到個人化建議。",
     "demoResponses": {
       "我現有的食材可以煮什麼？": "你冰箱裡有雞胸肉、米、花椰菜和醬油。要不要做 **蒜香醬油雞胸配花椰菜**？大約 25 分鐘 — 購物清單我只幫你加了蒜頭。",

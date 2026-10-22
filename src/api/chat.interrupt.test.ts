@@ -76,4 +76,23 @@ describe('web HITL pending must stay actionable', () => {
       'chatApi.getHistory types must include pendingInterrupt',
     );
   });
+
+  it('sends the shown interruptId and ignores a second click while resume is in flight', () => {
+    const src = readFileSync(join(root, 'src/components/AICookingAssistant.tsx'), 'utf8');
+    assert.match(src, /resumeLock\.current/, 'resume must be guarded by an in-flight lock');
+    assert.match(
+      src,
+      /disabled=\{resumeInFlight\}/,
+      'approve and reject must be disabled while resume is in flight',
+    );
+    assert.match(
+      src,
+      /interruptId:\s*approval\.interruptId/,
+      'resume must send the interruptId of the card being decided',
+    );
+    assert.match(src, /ai\.approvalExpired/);
+    assert.match(src, /ai\.approvalMismatch/);
+    assert.match(src, /ai\.approvalTargetMissing/);
+    assert.match(src, /loadHistoryForSession\(approval\.sessionId\)/);
+  });
 });

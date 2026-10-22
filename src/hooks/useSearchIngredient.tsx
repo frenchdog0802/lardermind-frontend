@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { IngredientEntry } from '../api/types';
+import { isAscii } from '../utils/isAscii';
 
 const useSearchIngredients = (
     searchTerm: string,
@@ -33,7 +34,7 @@ const useSearchIngredients = (
                 const filtered = allIngredients
                     .filter((i: IngredientEntry) => {
                         const query = searchTerm.toLowerCase().trim();
-                        const isEnglish = /^[\x00-\x7F]*$/.test(i.name);
+                        const isEnglish = isAscii(i.name);
                         const nameLower = i.name.toLowerCase();
                         return isEnglish
                             ? nameLower.includes(query)
