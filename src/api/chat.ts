@@ -93,6 +93,11 @@ export interface StreamSendHandlers {
     onSessionTitle?: (payload: { sessionId: string; title: string }) => void;
 }
 
+export type ChatAuthOptions = {
+    /** Override localStorage JWT (e.g. guest session token). */
+    bearerToken?: string;
+};
+
 export const CARD_RESPONSE_TYPES: ChatResponseType[] = [
     'recipe_created',
     'recipe_imported',
@@ -268,13 +273,48 @@ async function consumeSseStream(
     }
 }
 
+async function chatFetchJson<T>(
+    path: string,
+    init: RequestInit,
+    auth?: ChatAuthOptions,
+): Promise<import('./types').ApiResponse<T>> {
+    const token = auth?.bearerToken ?? getAuthToken();
+    const headers = new Headers(init.headers);
+    if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json; charset=UTF-8');
+    }
+    if (!headers.has('Accept')) {
+        headers.set('Accept', 'application/json');
+    }
+    if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+    }
+    const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
+    return (await res.json()) as import('./types').ApiResponse<T>;
+}
+
 export const chatApi = {
-    send: (data: ChatRequest) =>
-        api.post<ChatResponse>('/api/chat/send', withClientLocalDate(data)),
-    resume: (data: ChatResumeRequest) =>
-        api.post<ChatResponse>('/api/chat/resume', data),
-    streamSend: async (data: ChatRequest, handlers: StreamSendHandlers, signal?: AbortSignal) => {
-        const token = getAuthToken();
+    send: (data: ChatRequest, auth?: ChatAuthOptions) =>
+        auth?.bearerToken
+            ? chatFetchJson<ChatResponse>('/api/chat/send', {
+                  method: 'POST',
+                  body: JSON.stringify(withClientLocalDate(data)),
+              }, auth)
+            : api.post<ChatResponse>('/api/chat/send', withClientLocalDate(data)),
+    resume: (data: ChatResumeRequest, auth?: ChatAuthOptions) =>
+        auth?.bearerToken
+            ? chatFetchJson<ChatResponse>('/api/chat/resume', {
+                  method: 'POST',
+                  body: JSON.stringify(data),
+              }, auth)
+            : api.post<ChatResponse>('/api/chat/resume', data),
+    streamSend: async (
+        data: ChatRequest,
+        handlers: StreamSendHandlers,
+        signal?: AbortSignal,
+        auth?: ChatAuthOptions,
+    ) => {
+        const token = auth?.bearerToken ?? getAuthToken();
         const response = await fetch(`${BASE_URL}/api/chat/stream`, {
             method: 'POST',
             headers: {
@@ -300,8 +340,17 @@ export const chatApi = {
         await consumeSseStream(response.body, handlers, signal);
     },
     listSessions: () => api.get<{ sessions: ChatSession[] }>('/api/chat/sessions'),
-    createSession: (title?: string) =>
-        api.post<ChatSession>('/api/chat/sessions', title ? { title } : {}),
+    createSession: (title?: string, auth?: ChatAuthOptions) =>
+        auth?.bearerToken
+            ? chatFetchJson<ChatSession>(
+                  '/api/chat/sessions',
+                  {
+                      method: 'POST',
+                      body: JSON.stringify(title ? { title } : {}),
+                  },
+                  auth,
+              )
+            : api.post<ChatSession>('/api/chat/sessions', title ? { title } : {}),
     renameSession: (id: string, title: string) =>
         api.patch<ChatSession>(`/api/chat/sessions/${id}`, { title }),
     deleteSession: (id: string) =>

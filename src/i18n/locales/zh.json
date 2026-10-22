@@ -197,9 +197,29 @@
     "addItem": "新增項目",
     "itemNamePlaceholder": "搜尋或輸入品名",
     "empty": "找不到項目",
+    "emptyAskAi": "貼清單請 AI 幫忙",
     "quantity": "數量",
     "unit": "單位",
     "expiry": "有效期限"
+  },
+  "pantryVision": {
+    "scan": "掃描食材",
+    "attach": "用照片加入庫存",
+    "takePhoto": "拍照",
+    "chooseLibrary": "從相簿選擇",
+    "pickSource": "用照片加入食材",
+    "reviewTitle": "確認項目",
+    "confirm": "加入庫存",
+    "cancel": "取消",
+    "approxHint": "數量為大約估計，加入前可編輯。",
+    "empty": "未辨識到食材，請換一張照片試試。",
+    "category": "種類",
+    "name": "品項名稱",
+    "successTitle": "庫存已更新",
+    "successBody": "已將 {{count}} 項加入庫存。",
+    "errorTitle": "辨識失敗",
+    "errorRecognize": "圖片辨識失敗，請再試一次。",
+    "errorApply": "無法更新庫存，請再試一次。"
   },
   "shopping": {
     "title": "購物清單",
@@ -209,6 +229,7 @@
     "itemNamePlaceholder": "搜尋或輸入品名",
     "itemsToBuy": "待購項目",
     "empty": "購物清單是空的",
+    "emptyAskAi": "貼清單請 AI 幫忙",
     "checked": "已勾選",
     "syncToPantry": "將 {{n}} 項加入庫存",
     "pendingSync": "待入庫",
@@ -240,6 +261,7 @@
     "searchPlaceholder": "搜尋食譜...",
     "addRecipe": "新增食譜",
     "empty": "找不到食譜",
+    "emptyAskAi": "貼清單請 AI 幫忙",
     "mealNamePlaceholder": "輸入你做了什麼",
     "stepsPlaceholder": "每行一個步驟",
     "addPhoto": "新增食譜照片",
@@ -267,27 +289,33 @@
     "chipPantry": "食材庫 · {{count}}",
     "chipBuy": "待購 · {{count}}",
     "newChat": "新對話",
-    "emptyHint": "不用自己填表單 — 直接跟 AI 說你要什麼。",
+    "emptyHint": "不用自己填表單 — 貼上冰箱或購物清單，我就幫你建議能煮什麼。",
     "emptyCta": {
       "pantry": "請 AI 更新冰箱",
       "shopping": "請 AI 建立購物清單",
       "recipes": "請 AI 匯入食譜",
-      "calendar": "請 AI 規劃本週"
+      "calendar": "請 AI 規劃本週",
+      "pasteList": "貼清單請 AI 幫忙"
     },
     "emptyPrompts": {
       "pantry": "把雞胸肉、米和花椰菜加入冰箱",
       "shopping": "把牛奶、雞蛋和麵包加入購物清單",
       "recipes": "從網址匯入食譜（網站、YouTube 或 Instagram）",
       "calendar": "幫我規劃這週剩下的晚餐",
-      "cook": "我現有的食材可以煮什麼？"
+      "cook": "我現有的食材可以煮什麼？",
+      "pasteList": "我冰箱裡有：\n- 雞胸肉\n- 米\n- 花椰菜\n- 醬油\n\n請加入食材庫，建議可用食譜，再告訴我能煮什麼。"
     },
     "suggestedPrompts": [
+      "我冰箱裡有：\n- 雞胸肉\n- 米\n- 花椰菜\n- 醬油\n\n請加入食材庫，建議可用食譜，再告訴我能煮什麼。",
       "我現有的食材可以煮什麼？",
       "幫我規劃這週剩下的晚餐",
-      "從網址匯入食譜（網站、YouTube 或 Instagram）",
-      "把雞胸肉、米和花椰菜加入冰箱"
+      "從網址匯入食譜（網站、YouTube 或 Instagram）"
     ],
     "suggestedPromptCards": [
+      {
+        "title": "貼上冰箱清單",
+        "prompt": "我冰箱裡有：\n- 雞胸肉\n- 米\n- 花椰菜\n- 醬油\n\n請加入食材庫，建議可用食譜，再告訴我能煮什麼。"
+      },
       {
         "title": "用現有食材煮",
         "prompt": "我現有的食材可以煮什麼？"
@@ -299,12 +327,20 @@
       {
         "title": "匯入食譜",
         "prompt": "從網址匯入食譜（網站、YouTube 或 Instagram）"
-      },
-      {
-        "title": "加入食材庫",
-        "prompt": "把雞胸肉、米和花椰菜加入冰箱"
       }
     ],
+    "guestWelcome": "貼上冰箱或購物清單，我幫你建議能煮什麼。這次試用不用註冊。",
+    "guestTryTitle": "試試助理",
+    "guestBadge": "即時試用",
+    "guestMintFailed": "無法開始訪客試用。",
+    "guestSignUpInstead": "改為註冊",
+    "guestApproveTitle": "確認套用這些變更？",
+    "guestApprove": "確認",
+    "guestReject": "拒絕",
+    "guestSavePrompt": "覺得有用的話，註冊可保留冰箱、食譜、計畫與這次對話。",
+    "guestSaveCta": "保存我的廚房",
+    "guestReset": "重設對話",
+    "guestFooter": "訪客試用 — 註冊可保留冰箱、食譜與廚房進度。",
     "demoWelcome": "試試下方提示，或自己輸入。",
     "demoSuggestedPrompts": [
       "我現有的食材可以煮什麼？",

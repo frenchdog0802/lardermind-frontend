@@ -22,7 +22,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
 
     const { headers: extraHeaders, ...rest } = options;
     const headers = new Headers(extraHeaders);
-    if (rest.body !== undefined && !headers.has('Content-Type')) {
+    const isFormData =
+        typeof FormData !== 'undefined' && rest.body instanceof FormData;
+    if (
+        rest.body !== undefined &&
+        !headers.has('Content-Type') &&
+        !isFormData
+    ) {
         headers.set('Content-Type', 'application/json; charset=UTF-8');
     }
     if (!headers.has('Accept')) {
@@ -55,6 +61,16 @@ export const api = {
         request<T>(path, { method: 'GET', ...init }),
     post: <T>(path: string, body?: unknown, init?: ApiCallInit) =>
         request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}), ...init }),
+    postForm: <T>(path: string, formData: FormData, init?: ApiCallInit) =>
+        request<T>(path, {
+            method: 'POST',
+            body: formData,
+            ...init,
+            headers: {
+                Accept: 'application/json',
+                ...(init?.headers ?? {}),
+            },
+        }),
     put: <T>(path: string, body?: unknown, init?: ApiCallInit) =>
         request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}), ...init }),
     patch: <T>(path: string, body?: unknown, init?: ApiCallInit) =>

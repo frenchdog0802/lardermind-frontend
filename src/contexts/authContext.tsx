@@ -1,7 +1,8 @@
 import React, { useEffect, useState, createContext, useContext } from 'react';
-import { auth } from '../api/api-auth.ts';
+import { auth, claimGuestKitchenIfPresent } from '../api/api-auth.ts';
 import { authHelper } from '../api/auth-helper.ts';
 import { ApiResponse, User, } from '../api/types.ts';
+import { clearGuestToken } from '../utils/guestSession';
 
 export interface AuthResponse {
   success: boolean;
@@ -77,6 +78,7 @@ export const AuthProvider: React.FC<{
             authHelper.authenticate(redirected.token);
             setUser(redirected.user);
             localStorage.setItem('user', JSON.stringify(redirected.user));
+            void claimGuestKitchenIfPresent();
             setInitializing(false);
             return;
           }
@@ -113,6 +115,7 @@ export const AuthProvider: React.FC<{
           setUser(createdUser);
           localStorage.setItem('user', JSON.stringify(createdUser));
           authHelper.authenticate(response.data?.token);
+          clearGuestToken();
           authResponse.success = true;
         } else {
           authResponse.success = false;
@@ -132,6 +135,7 @@ export const AuthProvider: React.FC<{
           authHelper.authenticate(response.data.token);
           setUser(response.data.user);
           localStorage.setItem('user', JSON.stringify(response.data.user));
+          clearGuestToken();
           authResponse.success = true;
         } else {
           authResponse.success = false;
@@ -152,6 +156,7 @@ export const AuthProvider: React.FC<{
           authHelper.authenticate(response.data.token);
           setUser(response.data.user);
           localStorage.setItem('user', JSON.stringify(response.data.user));
+          clearGuestToken();
           authResponse.success = true;
         } else {
           authResponse.success = false;

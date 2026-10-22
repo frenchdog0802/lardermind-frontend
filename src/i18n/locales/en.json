@@ -197,9 +197,29 @@
     "addItem": "Add New Item",
     "itemNamePlaceholder": "Search or add item name",
     "empty": "No items found",
+    "emptyAskAi": "Ask AI with a pasted list",
     "quantity": "Quantity",
     "unit": "Unit",
     "expiry": "Expiry"
+  },
+  "pantryVision": {
+    "scan": "Scan groceries",
+    "attach": "Add pantry items from photo",
+    "takePhoto": "Take photo",
+    "chooseLibrary": "Choose from library",
+    "pickSource": "Add ingredients from a photo",
+    "reviewTitle": "Review items",
+    "confirm": "Add to pantry",
+    "cancel": "Cancel",
+    "approxHint": "Quantities are approximate — edit before adding.",
+    "empty": "No food items recognized. Try another photo.",
+    "category": "Category",
+    "name": "Ingredient name",
+    "successTitle": "Pantry updated",
+    "successBody": "Added {{count}} item(s) to your pantry.",
+    "errorTitle": "Couldn't recognize",
+    "errorRecognize": "Image recognition failed. Please try again.",
+    "errorApply": "Couldn't update pantry. Please try again."
   },
   "shopping": {
     "title": "Shopping List",
@@ -209,6 +229,7 @@
     "itemNamePlaceholder": "Search or add item name",
     "itemsToBuy": "Items to Buy",
     "empty": "No items in your shopping list",
+    "emptyAskAi": "Ask AI with a pasted list",
     "checked": "Checked off",
     "syncToPantry": "Add {{n}} items to pantry",
     "pendingSync": "Pending pantry",
@@ -240,6 +261,7 @@
     "searchPlaceholder": "Search recipes...",
     "addRecipe": "Add New Recipe",
     "empty": "No recipes found",
+    "emptyAskAi": "Ask AI with a pasted list",
     "mealNamePlaceholder": "Enter what you cooked",
     "stepsPlaceholder": "One step per line",
     "addPhoto": "Add a photo of your Recipe",
@@ -267,27 +289,33 @@
     "chipPantry": "Pantry · {{count}}",
     "chipBuy": "Buy · {{count}}",
     "newChat": "New chat",
-    "emptyHint": "Skip the forms — just tell the AI what you need.",
+    "emptyHint": "Skip the forms — paste your fridge or shopping list and I’ll suggest what you can cook.",
     "emptyCta": {
       "pantry": "Ask AI to update pantry",
       "shopping": "Ask AI to build a list",
       "recipes": "Ask AI to import a recipe",
-      "calendar": "Ask AI to plan this week"
+      "calendar": "Ask AI to plan this week",
+      "pasteList": "Ask AI with a pasted list"
     },
     "emptyPrompts": {
       "pantry": "Add chicken, rice, and broccoli to my pantry",
       "shopping": "Add milk, eggs, and bread to my shopping list",
       "recipes": "Import a recipe from a URL (website, YouTube, or Instagram)",
       "calendar": "Plan dinners for the rest of this week",
-      "cook": "What can I cook with what I have?"
+      "cook": "What can I cook with what I have?",
+      "pasteList": "Here’s what’s in my fridge:\n- chicken breast\n- rice\n- broccoli\n- soy sauce\n\nAdd these to my pantry, suggest recipes I can make, then tell me what I can cook."
     },
     "suggestedPrompts": [
+      "Here’s what’s in my fridge:\n- chicken breast\n- rice\n- broccoli\n- soy sauce\n\nAdd these to my pantry, suggest recipes I can make, then tell me what I can cook.",
       "What can I cook with what I have?",
       "Plan dinners for the rest of this week",
-      "Import a recipe from a URL (website, YouTube, or Instagram)",
-      "Add chicken, rice, and broccoli to my pantry"
+      "Import a recipe from a URL (website, YouTube, or Instagram)"
     ],
     "suggestedPromptCards": [
+      {
+        "title": "Paste my fridge list",
+        "prompt": "Here’s what’s in my fridge:\n- chicken breast\n- rice\n- broccoli\n- soy sauce\n\nAdd these to my pantry, suggest recipes I can make, then tell me what I can cook."
+      },
       {
         "title": "Cook with what I have",
         "prompt": "What can I cook with what I have?"
@@ -299,12 +327,20 @@
       {
         "title": "Import a recipe",
         "prompt": "Import a recipe from a URL (website, YouTube, or Instagram)"
-      },
-      {
-        "title": "Add items to pantry",
-        "prompt": "Add chicken, rice, and broccoli to my pantry"
       }
     ],
+    "guestWelcome": "Paste what’s in your fridge — I’ll suggest what you can cook. No account needed for this try.",
+    "guestTryTitle": "Try the assistant",
+    "guestBadge": "Live try",
+    "guestMintFailed": "Couldn’t start a guest session.",
+    "guestSignUpInstead": "Sign up instead",
+    "guestApproveTitle": "Approve these changes?",
+    "guestApprove": "Approve",
+    "guestReject": "Reject",
+    "guestSavePrompt": "Looks useful — save to keep pantry, recipes, plans, and this chat.",
+    "guestSaveCta": "Save my kitchen",
+    "guestReset": "Reset chat",
+    "guestFooter": "Guest trial — save to keep pantry, recipes, and this kitchen.",
     "demoWelcome": "Try a prompt below, or type your own.",
     "demoSuggestedPrompts": [
       "What can I cook with what I have?",

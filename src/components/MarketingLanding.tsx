@@ -8,13 +8,33 @@ import {
   HERO_IMAGE,
   HERO_WIDTH,
 } from '../remotion/HeroScene';
-import { DemoChatBox } from './DemoChatBox';
+import { GuestChatBox } from './GuestChatBox';
 import { PricingSection } from './PricingSection';
+import { ProductPreviewMock } from './ProductPreviewMock';
 
 interface MarketingLandingProps {
   onGetStarted: () => void;
   onLogin: () => void;
 }
+
+const FAQ_ITEMS = [
+  {
+    q: 'How is LarderMind different from Mealime?',
+    a: 'Mealime is a strong meal-plan and grocery workflow. LarderMind is pantry-first and chat-first: you talk to an AI that remembers preferences, plans from what you already have, and closes the loop into calendar, shopping list, and pantry.',
+  },
+  {
+    q: 'How is it different from SuperCook?',
+    a: 'SuperCook is great at “what can I make from these ingredients?” as a recipe finder. LarderMind covers that idea inside a full kitchen loop — ongoing pantry, weekly plan, shopping list, and cooking confirmation — not only one-shot recipe search.',
+  },
+  {
+    q: 'Is there a free plan?',
+    a: 'Yes. Free includes pantry, shopping, calendar, and a daily AI chat allowance. Pro raises AI messages, recipe imports, and upload limits — from $4.99/mo.',
+  },
+  {
+    q: 'Where does it run?',
+    a: 'On the web, and on iOS and Android. Sign up free on the web to start; use the same kitchen across devices.',
+  },
+] as const;
 
 function usePrefersReducedMotion() {
   const [prefersReduced, setPrefersReduced] = useState(false);
@@ -107,6 +127,9 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
           <a href="#pricing" className="text-sm text-muted hover:text-ink">
             Pricing
           </a>
+          <a href="#faq" className="text-sm text-muted hover:text-ink">
+            FAQ
+          </a>
           <button type="button" onClick={onLogin} className="btn-secondary text-sm">
             Log in
           </button>
@@ -127,12 +150,13 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
           </h1>
           <div className="mt-8 flex flex-wrap gap-4">
             <button type="button" onClick={onGetStarted} className="btn-primary">
-              Get started
+              Sign up free
             </button>
             <button type="button" onClick={onLogin} className="btn-secondary px-6 py-3">
               Log in
             </button>
           </div>
+          <p className="mt-4 text-sm text-muted">Works on Web · iOS · Android</p>
         </div>
       </header>
 
@@ -151,7 +175,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
             </p>
             <ul className="mt-8 space-y-4">
               {[
-                'Ask what you can cook with what\'s already in your fridge',
+                "Ask what you can cook with what's already in your fridge",
                 'Plan a week of dinners that respect allergies and picky eaters',
                 'Add ingredients or import a recipe URL in one message',
               ].map((item) => (
@@ -162,7 +186,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
               ))}
             </ul>
             <button type="button" onClick={onGetStarted} className="btn-primary mt-10">
-              Get started free
+              Sign up free
             </button>
           </RevealOnScroll>
 
@@ -172,12 +196,11 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
               <div className="relative">
                 <div className="mb-3 flex items-center justify-end">
                   <span className="rounded-full bg-sage/60 px-2.5 py-0.5 text-xs font-medium text-herb-deep">
-                    Live demo
+                    Live try
                   </span>
                 </div>
-                <DemoChatBox
+                <GuestChatBox
                   onGetStarted={onGetStarted}
-                  autoPlay={!prefersReducedMotion}
                   showHeader={false}
                   size="large"
                 />
@@ -186,6 +209,8 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
           </RevealOnScroll>
         </div>
       </section>
+
+      <ProductPreviewMock />
 
       <section className="px-[5%] py-20">
         <RevealOnScroll>
@@ -215,7 +240,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
             },
             {
               title: 'Leftover guilt',
-              body: 'Ingredients in the fridge, planned into tonight\'s dinner.',
+              body: "Ingredients in the fridge, planned into tonight's dinner.",
             },
           ].map((item) => (
             <RevealOnScroll key={item.title}>
@@ -251,7 +276,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
             {
               step: '02',
               title: 'Cook with what you have',
-              body: 'Plans prioritize ingredients already in your pantry and fridge — especially what\'s about to expire.',
+              body: "Plans prioritize ingredients already in your pantry and fridge — especially what's about to expire.",
               image:
                 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
               alt: 'Fresh vegetables and ingredients on a counter',
@@ -260,7 +285,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
             {
               step: '03',
               title: 'Auto grocery list',
-              body: 'Only buy what you\'re missing. One sorted list, ready for your weekly shop.',
+              body: "Only buy what you're missing. One sorted list, ready for your weekly shop.",
               image:
                 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?auto=format&fit=crop&w=800&q=80',
               alt: 'Fresh produce at a market',
@@ -297,6 +322,30 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
 
       <PricingSection onGetStarted={onGetStarted} />
 
+      <section id="faq" className="border-t border-line px-[5%] py-20">
+        <RevealOnScroll>
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <h2 className="font-display text-[clamp(1.75rem,4vw,2.25rem)] font-semibold text-ink">
+              FAQ
+            </h2>
+            <p className="mt-3 text-lg text-muted">
+              Quick answers if you already use Mealime, SuperCook, or another meal app.
+            </p>
+          </div>
+        </RevealOnScroll>
+
+        <dl className="mx-auto max-w-2xl divide-y divide-line">
+          {FAQ_ITEMS.map((item) => (
+            <RevealOnScroll key={item.q}>
+              <div className="py-6">
+                <dt className="font-semibold text-ink">{item.q}</dt>
+                <dd className="mt-2 text-muted">{item.a}</dd>
+              </div>
+            </RevealOnScroll>
+          ))}
+        </dl>
+      </section>
+
       <section id="join" className="border-t border-line px-[5%] py-20">
         <RevealOnScroll>
           <div className="mx-auto max-w-xl text-center">
@@ -308,7 +357,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
             </p>
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <button type="button" onClick={onGetStarted} className="btn-primary">
-                Get started free
+                Sign up free
               </button>
               <button type="button" onClick={onLogin} className="btn-secondary px-6 py-3">
                 Log in
