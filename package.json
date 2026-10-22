@@ -8,6 +8,7 @@
     "build": "npx vite build",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
     "lint:no-emoji": "node scripts/lint-no-emoji-icons.mjs",
     "test:e2e": "playwright test",
     "test:e2e:a11y": "playwright test e2e/a11y.spec.ts",

@@ -1,9 +1,10 @@
-import React from 'react';
-import { ArrowLeftIcon, ShoppingCartIcon } from 'lucide-react';
+import { ArrowLeftIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
+import type { RecipeSuggestion } from '../api/types';
+import { recipeSuggestions } from '../utils/recipeData';
 import { RecipeCard } from './RecipeCard';
 interface RecipeSuggestionsProps {
-  onSelectRecipe: (recipe: any) => void;
+  onSelectRecipe: (recipe: RecipeSuggestion) => void;
   onBack: () => void;
 }
 export function RecipeSuggestions({
@@ -11,7 +12,6 @@ export function RecipeSuggestions({
   onBack
 }: RecipeSuggestionsProps) {
   const {
-    recipeSuggestions,
     pantryItems
   } = usePantry();
   // Filter recipes based on available ingredients

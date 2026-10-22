@@ -3,6 +3,9 @@
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message?: string;
+    /** Stable machine code from the API error catalog. */
+    code?: string;
+    requestId?: string;
     data?: T;
     statusCode?: number;
 }
@@ -75,6 +78,8 @@ export type ShoppingListItem = {
     quantity: number;
     unit: string;
     checked: boolean;
+    /** Optimistic concurrency token. Starts at 1; updates increment it. */
+    version?: number;
     /** True when quantity has been merged into pantry via batch sync. */
     synced_to_pantry?: boolean;
     ingredient_id?: string;
@@ -172,6 +177,10 @@ export interface RecipeSuggestion {
     difficulty?: string;
     image?: string;
     savedAt?: number;
+    swaps?: Array<{
+        original: string;
+        alternative: string;
+    }>;
     missingIngredient?: {
         name: string;
         quantity: number;

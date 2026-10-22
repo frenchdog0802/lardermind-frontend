@@ -1,6 +1,6 @@
 import { RecipeSuggestion } from '../api/types';
 export const recipeSuggestions: RecipeSuggestion[] = [{
-  id: 1,
+  id: '1',
   name: "Spaghetti Aglio e Olio",
   image: "https://images.unsplash.com/photo-1589227365533-cee630bd59bd?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
   cookTime: 20,
@@ -35,7 +35,7 @@ export const recipeSuggestions: RecipeSuggestion[] = [{
     alternative: "black pepper"
   }]
 }, {
-  id: 2,
+  id: '2',
   name: "Simple Veggie Omelet",
   image: "https://images.unsplash.com/photo-1510693206972-df098062cb71?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
   cookTime: 15,
@@ -74,7 +74,7 @@ export const recipeSuggestions: RecipeSuggestion[] = [{
     alternative: "nutritional yeast (for dairy-free)"
   }]
 }, {
-  id: 3,
+  id: '3',
   name: "Quick Avocado Toast",
   image: "https://images.unsplash.com/photo-1541519227354-08fa5d50c44d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
   cookTime: 10,
@@ -109,7 +109,7 @@ export const recipeSuggestions: RecipeSuggestion[] = [{
     alternative: "everything bagel seasoning"
   }]
 }, {
-  id: 4,
+  id: '4',
   name: "Simple Chicken Stir-Fry",
   image: "https://images.unsplash.com/photo-1603356033288-acfcb54801e6?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
   cookTime: 25,
@@ -152,7 +152,7 @@ export const recipeSuggestions: RecipeSuggestion[] = [{
     alternative: "tamari or coconut aminos"
   }]
 }, {
-  id: 5,
+  id: '5',
   name: "Classic Tuna Salad",
   image: "https://images.unsplash.com/photo-1546069901-5ec6a79120b0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
   cookTime: 10,

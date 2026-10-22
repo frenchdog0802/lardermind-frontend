@@ -7,6 +7,7 @@ import useSearchIngredients from '../hooks/useSearchIngredient';
 import { NumberInput } from './NumberInput';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
 import { AppHeader } from './AppHeader';
+import { isAscii } from '../utils/isAscii';
 import type { MeasurementSystem } from '../utils/units';
 
 interface ShoppingListProps {
@@ -98,7 +99,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
 
     const filteredShoppingItems = useMemo(() => {
         return shoppingList.filter(item => {
-            const isEnglish = /^[\x00-\x7F]*$/.test(item.name);
+            const isEnglish = isAscii(item.name);
             return isEnglish
                 ? item.name.toLowerCase().includes(shoppingSearchQuery.toLowerCase())
                 : item.name.includes(shoppingSearchQuery);
@@ -121,6 +122,12 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
         }, idsForUndo ? 10000 : 3000);
     };
 
+    const noteShoppingResult = (res: { code?: string }) => {
+        if (res.code === 'version_conflict') {
+            showToast(t('shopping.versionConflict'));
+        }
+    };
+
     const handleSelectIngredient = (ingredient: IngredientEntry) => {
         setNewShoppingItem({
             name: ingredient.name,
@@ -136,7 +143,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
         if (!newShoppingItem.name.trim()) return;
         const existingItem = shoppingList.find(item => item.name.toLowerCase() === newShoppingItem.name.toLowerCase());
         if (existingItem) {
-            void updateShoppingListItem({ ...existingItem, quantity: newShoppingItem.quantity });
+            void updateShoppingListItem({ ...existingItem, quantity: newShoppingItem.quantity }).then(noteShoppingResult);
         } else {
             addShoppingListItem({ ...newShoppingItem });
         }
@@ -170,6 +177,10 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
 
         const updatedItem = { ...item, checked: !item.checked };
         const res = await updateShoppingListItem(updatedItem);
+        if (res.code === 'version_conflict') {
+            noteShoppingResult(res);
+            return;
+        }
         if (res.success) {
             applyCheckedLocally(id, updatedItem.checked);
             if (shoppingSearchQuery) setShoppingSearchQuery('');
@@ -188,16 +199,20 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
             await unsyncShoppingItemsFromPantry([item.id]);
         }
         const res = await updateShoppingListItem({ ...item, checked: false });
+        if (res.code === 'version_conflict') {
+            noteShoppingResult(res);
+            return;
+        }
         if (res.success) {
             applyCheckedLocally(item.id, false);
             if (shoppingSearchQuery) setShoppingSearchQuery('');
         }
     };
 
-    const handleRemoveShoppingItem = (id: string) => {
-        if (removeShoppingListItem) {
-            removeShoppingListItem(id);
-        }
+    const handleRemoveShoppingItem = async (id: string) => {
+        if (!removeShoppingListItem) return;
+        const res = await removeShoppingListItem(id);
+        noteShoppingResult(res);
     };
 
     const uncheckedCount = useMemo(
@@ -225,7 +240,8 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                 showToast(t('shopping.allPurchased', { count: unchecked.length }));
             } else {
                 await fetchAllShoppingListItems();
-                showToast('Some items could not be completed. Please try again.');
+                const conflict = results.some(res => res.code === 'version_conflict');
+                showToast(conflict ? t('shopping.versionConflict') : t('shopping.completeFailed'));
             }
         } finally {
             setIsCompletingAll(false);
@@ -513,7 +529,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                                 </span>
                                             )}
                                             <button
-                                                onClick={() => handleRemoveShoppingItem(item.id)}
+                                                onClick={() => void handleRemoveShoppingItem(item.id)}
                                                 className="p-1.5 flex-shrink-0 rounded-full hover:bg-sage/50 text-muted hover:text-herb transition-colors"
                                                 aria-label="Remove item"
                                             >

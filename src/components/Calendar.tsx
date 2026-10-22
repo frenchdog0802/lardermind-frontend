@@ -367,7 +367,7 @@ export function Calendar({
     });
     // Add cooking history data for the week
     mealPlans.forEach((item: any) => {
-      if (weekData.hasOwnProperty(item.serving_date)) {
+      if (Object.prototype.hasOwnProperty.call(weekData, item.serving_date)) {
         weekData[item.serving_date].push(item);
       }
     });

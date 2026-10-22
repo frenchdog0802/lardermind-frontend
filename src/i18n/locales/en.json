@@ -224,6 +224,8 @@
     "syncCancel": "Cancel",
     "purchasedOnly": "Marked purchased",
     "allPurchased": "Marked {{count}} items purchased",
+    "versionConflict": "This item changed elsewhere. Showing the latest version.",
+    "completeFailed": "Some items could not be completed. Please try again.",
     "syncOffline": "You're offline - changes save on this device",
     "syncEmpty": "Select at least one item",
     "quantity": "Qty",
@@ -309,6 +311,13 @@
       "Plan dinners for the rest of this week",
       "Add chicken, rice, and broccoli to my pantry"
     ],
+    "approvalExpired": "This approval expired. Ask again.",
+    "approvalMismatch": "That approval no longer matches this conversation. I refreshed it.",
+    "approvalTargetMissing": "Some of those items are gone, so nothing was changed. I refreshed the conversation.",
+    "approvalInProgress": "That approval is already being applied.",
+    "approvalInvalid": "Those changes could not be applied. Ask again.",
+    "approvalNone": "There is nothing waiting for approval.",
+    "approvalFailed": "Could not apply that decision. Please try again.",
     "demoFallback": "Great question! Sign up free to get personalized answers based on your pantry, family preferences, and calendar.",
     "demoResponses": {
       "What can I cook with what I have?": "You have chicken breast, rice, broccoli, and soy sauce in your pantry. How about **Garlic Soy Chicken & Broccoli**? About 25 minutes — I only added garlic to your shopping list.",

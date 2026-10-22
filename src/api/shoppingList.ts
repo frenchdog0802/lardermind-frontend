@@ -1,76 +1,19 @@
 import { api } from './client';
 import {
+    idempotencyHeaders,
+    parseShoppingListItems,
+    shoppingCreateBody,
+    shoppingDeletePath,
+    shoppingUpdateBody,
+} from './shoppingSync';
+import {
     ShoppingListItem,
     SyncToPantryItemInput,
     SyncToPantryResult,
     UnsyncFromPantryResult,
 } from './types';
 
-type ShoppingListItemDto = {
-    id?: string;
-    name?: string;
-    quantity?: number;
-    unit?: string;
-    checked?: boolean;
-    synced_to_pantry?: boolean;
-    ingredient_id?: string;
-    details?: Partial<ShoppingListItem> & Record<string, unknown>;
-};
-
-function fromDto(dto: ShoppingListItemDto): ShoppingListItem {
-    const details = dto.details ?? {};
-    const synced =
-        dto.synced_to_pantry ??
-        (details.synced_to_pantry as boolean | undefined) ??
-        false;
-    return {
-        id: String(dto.id ?? details.id ?? ''),
-        name: String(dto.name ?? details.name ?? ''),
-        quantity: Number(dto.quantity ?? details.quantity ?? 0),
-        unit: String(dto.unit ?? details.unit ?? ''),
-        checked: Boolean(dto.checked ?? details.checked ?? false),
-        synced_to_pantry: Boolean(synced),
-        ingredient_id:
-            dto.ingredient_id != null
-                ? String(dto.ingredient_id)
-                : details.ingredient_id != null
-                  ? String(details.ingredient_id)
-                  : undefined,
-    };
-}
-
-/** Backend Create/Update DTOs expect { name, details: { quantity, unit, checked } }. */
-function toRequestPayload(data: Partial<ShoppingListItem>) {
-    return {
-        name: data.name,
-        details: {
-            quantity: data.quantity,
-            unit: data.unit,
-            checked: data.checked ?? false,
-        },
-    };
-}
-
-export function parseShoppingListItems(data: unknown): ShoppingListItem[] {
-    if (Array.isArray(data)) {
-        return data.map(fromDto);
-    }
-    if (data && typeof data === 'object' && Array.isArray((data as { items?: unknown }).items)) {
-        return (data as { items: ShoppingListItemDto[] }).items.map(fromDto);
-    }
-    return [];
-}
-
-export function parseShoppingListItem(data: unknown): ShoppingListItem | null {
-    if (!data || typeof data !== 'object') {
-        return null;
-    }
-    const obj = data as Record<string, unknown>;
-    if (obj.item && typeof obj.item === 'object') {
-        return fromDto(obj.item as ShoppingListItemDto);
-    }
-    return fromDto(obj as ShoppingListItemDto);
-}
+export { parseShoppingListItem, parseShoppingListItems, readShoppingVersionConflict } from './shoppingSync';
 
 function parseSyncResult(data: unknown): SyncToPantryResult {
     const root = (data && typeof data === 'object' ? data : {}) as {
@@ -104,13 +47,20 @@ export const shoppingListApi = {
 
     get: (id: string | number) => api.get<unknown>(`/api/shopping-list/${id}`),
 
-    create: (data: Partial<ShoppingListItem>) =>
-        api.post<unknown>('/api/shopping-list', toRequestPayload(data)),
+    create: (data: Partial<ShoppingListItem>, idempotencyKey?: string) =>
+        api.post<unknown>('/api/shopping-list', shoppingCreateBody(data), {
+            headers: idempotencyHeaders(idempotencyKey),
+        }),
 
-    update: (id: string | number, data: Partial<ShoppingListItem>) =>
-        api.put<unknown>(`/api/shopping-list/${id}`, toRequestPayload(data)),
+    update: (id: string | number, data: Partial<ShoppingListItem>, idempotencyKey?: string) =>
+        api.put<unknown>(`/api/shopping-list/${id}`, shoppingUpdateBody(data), {
+            headers: idempotencyHeaders(idempotencyKey),
+        }),
 
-    delete: (id: string | number) => api.delete<void>(`/api/shopping-list/${id}`),
+    delete: (id: string | number, version?: number, idempotencyKey?: string) =>
+        api.delete<null>(shoppingDeletePath(id, version), {
+            headers: idempotencyHeaders(idempotencyKey),
+        }),
 
     syncToPantry: (items: SyncToPantryItemInput[]) =>
         api.post<unknown>('/api/shopping-list/sync-to-pantry', { items }),

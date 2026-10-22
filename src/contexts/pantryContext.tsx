@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useEffect } from 'react';
+import React, { useState, createContext, useContext, useEffect, useRef } from 'react';
 import { PantryItem, ShoppingListItem, Recipe, Folder, UserSettings, IngredientEntry, MealPlan, ApiResponse, ConfirmMealPlanResult } from '../api/types';
 import { recipeApi } from '../api/recipes';
 import { folderApi } from '../api/folder';
@@ -9,8 +9,10 @@ import {
   parseShoppingListItems,
   parseSyncResult,
   parseUnsyncResult,
+  readShoppingVersionConflict,
   shoppingListApi,
 } from '../api/shoppingList';
+import { mergeShoppingWrite } from '../api/shoppingSync';
 import { mealPlanApi } from '../api/mealPlan';
 import { userPreferencesApi } from '../api/userPreferences';
 import { resolveStoredLanguage } from '../i18n';
@@ -127,7 +129,7 @@ interface PantryContextType {
   fetchAllShoppingListItems: () => Promise<ShoppingListItem[]>;
   updateShoppingListItem: (item: ShoppingListItem) => Promise<ApiResponse<ShoppingListItem>>;
   addShoppingListItem: (item: Omit<ShoppingListItem, 'id'>) => void;
-  removeShoppingListItem?: (id: string) => void;
+  removeShoppingListItem?: (id: string) => Promise<ApiResponse<ShoppingListItem | null>>;
   syncShoppingItemsToPantry: (
     items: Array<{ id: string; quantity?: number; unit?: string }>,
   ) => Promise<ApiResponse<{ synced: ShoppingListItem[]; skipped: Array<{ id: string; reason: string }> }>>;
@@ -162,6 +164,26 @@ export function PantryProvider({
   // main state
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
+  const shoppingListRef = useRef<ShoppingListItem[]>([]);
+  const shoppingQueueRef = useRef(new Map<string, Promise<unknown>>());
+
+  const commitShoppingList = (updater: (prev: ShoppingListItem[]) => ShoppingListItem[]) => {
+    const next = updater(shoppingListRef.current);
+    shoppingListRef.current = next;
+    setShoppingList(next);
+  };
+
+  const enqueueShoppingWrite = <T,>(id: string, task: () => Promise<T>): Promise<T> => {
+    const previous = shoppingQueueRef.current.get(id) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    shoppingQueueRef.current.set(id, run);
+    void run.finally(() => {
+      if (shoppingQueueRef.current.get(id) === run) {
+        shoppingQueueRef.current.delete(id);
+      }
+    });
+    return run;
+  };
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
   const [mealPlansLoading, setMealPlansLoading] = useState(false);
@@ -392,7 +414,7 @@ export function PantryProvider({
       const fetchedItemsResponse = await shoppingListApi.list();
       if (fetchedItemsResponse && fetchedItemsResponse.data && fetchedItemsResponse.success) {
         const fetchedItems = parseShoppingListItems(fetchedItemsResponse.data);
-        setShoppingList(fetchedItems);
+        commitShoppingList(() => fetchedItems);
         return fetchedItems;
       }
     } catch (err) {
@@ -400,10 +422,68 @@ export function PantryProvider({
     }
     return [];
   };
-  const updateShoppingListItem = async (item: ShoppingListItem) => {
-    setShoppingList(prev => prev.map(i => i.id === item.id ? item : i));
-    return await shoppingListApi.update(item.id, item);
-  }
+  const updateShoppingListItem = (item: ShoppingListItem) => {
+    const baseline = shoppingListRef.current.find((entry) => entry.id === item.id);
+    return enqueueShoppingWrite(item.id, async () => {
+      const current = shoppingListRef.current.find((entry) => entry.id === item.id) ?? item;
+      const merged = mergeShoppingWrite(baseline, item, current);
+      if (merged.action === 'keep') {
+        return { success: true, data: merged.item } satisfies ApiResponse<ShoppingListItem>;
+      }
+      if (merged.action === 'conflict') {
+        commitShoppingList((prev) => prev.map((entry) => (entry.id === item.id ? merged.item : entry)));
+        return {
+          success: false,
+          code: 'version_conflict',
+          message: 'Version conflict',
+          data: merged.item,
+        } satisfies ApiResponse<ShoppingListItem>;
+      }
+
+      commitShoppingList((prev) => prev.map((entry) => (entry.id === item.id ? merged.item : entry)));
+      const response = await shoppingListApi.update(item.id, merged.item);
+      if (response.success && response.data) {
+        const saved = parseShoppingListItem(response.data) ?? merged.item;
+        commitShoppingList((prev) => prev.map((entry) => (entry.id === item.id ? saved : entry)));
+        return { ...response, data: saved };
+      }
+
+      const serverCurrent = readShoppingVersionConflict(response);
+      if (serverCurrent) {
+        const retry = mergeShoppingWrite(baseline ?? current, item, serverCurrent);
+        if (retry.action === 'send') {
+          const retried = await shoppingListApi.update(item.id, retry.item);
+          if (retried.success && retried.data) {
+            const saved = parseShoppingListItem(retried.data) ?? retry.item;
+            commitShoppingList((prev) => prev.map((entry) => (entry.id === item.id ? saved : entry)));
+            return { ...retried, data: saved };
+          }
+          const again = readShoppingVersionConflict(retried) ?? serverCurrent;
+          commitShoppingList((prev) => prev.map((entry) => (entry.id === item.id ? again : entry)));
+          return {
+            success: false,
+            code: 'version_conflict',
+            message: retried.message ?? 'Version conflict',
+            data: again,
+          } satisfies ApiResponse<ShoppingListItem>;
+        }
+        const resolved = retry.action === 'keep' ? retry.item : serverCurrent;
+        commitShoppingList((prev) => prev.map((entry) => (entry.id === item.id ? resolved : entry)));
+        if (retry.action === 'keep') {
+          return { success: true, data: resolved } satisfies ApiResponse<ShoppingListItem>;
+        }
+        return {
+          success: false,
+          code: 'version_conflict',
+          message: response.message ?? 'Version conflict',
+          data: resolved,
+        } satisfies ApiResponse<ShoppingListItem>;
+      }
+
+      commitShoppingList((prev) => prev.map((entry) => (entry.id === item.id ? current : entry)));
+      return response as ApiResponse<ShoppingListItem>;
+    });
+  };
 
   const addShoppingListItem = async (item: Omit<ShoppingListItem, 'id'>) => {
     // temporary item for optimistic UI
@@ -413,7 +493,7 @@ export function PantryProvider({
       checked: false
     };
 
-    setShoppingList(prev => [tempItem, ...prev]);
+    commitShoppingList((prev) => [tempItem, ...prev]);
 
     try {
       const savedItemResponse = await shoppingListApi.create(item);
@@ -422,26 +502,58 @@ export function PantryProvider({
 
         if (savedItem) {
           // replace temp with the one from backend
-          setShoppingList(prev =>
+          commitShoppingList((prev) =>
             prev.map(i => (i.id === tempItem.id ? savedItem : i))
           );
         } else {
-          setShoppingList(prev => prev.filter(i => i.id !== tempItem.id));
+          commitShoppingList((prev) => prev.filter(i => i.id !== tempItem.id));
         }
       } else {
         // rollback if response is invalid
-        setShoppingList(prev => prev.filter(i => i.id !== tempItem.id));
+        commitShoppingList((prev) => prev.filter(i => i.id !== tempItem.id));
       }
     } catch (err) {
       console.error('Insert shopping list item failed:', err);
       // rollback if needed
-      setShoppingList(prev => prev.filter(i => i.id !== tempItem.id));
+      commitShoppingList((prev) => prev.filter(i => i.id !== tempItem.id));
     }
 
   };
   const removeShoppingListItem = (id: string) => {
-    setShoppingList(prev => prev.filter(i => i.id !== id));
-    shoppingListApi.delete(id);
+    return enqueueShoppingWrite(id, async () => {
+      const previous = shoppingListRef.current.find((entry) => entry.id === id);
+      commitShoppingList((prev) => prev.filter((entry) => entry.id !== id));
+      try {
+        const response = await shoppingListApi.delete(id, previous?.version);
+        if (response.success || response.code === 'not_found') {
+          return response as ApiResponse<ShoppingListItem | null>;
+        }
+        const current = readShoppingVersionConflict(response);
+        if (current) {
+          commitShoppingList((prev) =>
+            prev.some((entry) => entry.id === current.id)
+              ? prev.map((entry) => (entry.id === current.id ? current : entry))
+              : [current, ...prev],
+          );
+          return {
+            success: false,
+            code: 'version_conflict',
+            message: response.message ?? 'Version conflict',
+            data: current,
+          } satisfies ApiResponse<ShoppingListItem | null>;
+        }
+        if (previous) {
+          commitShoppingList((prev) => [previous, ...prev.filter((entry) => entry.id !== id)]);
+        }
+        return response as ApiResponse<ShoppingListItem | null>;
+      } catch (err) {
+        console.error('Delete shopping list item failed:', err);
+        if (previous) {
+          commitShoppingList((prev) => [previous, ...prev.filter((entry) => entry.id !== id)]);
+        }
+        return { success: false, message: 'Delete failed' } satisfies ApiResponse<ShoppingListItem | null>;
+      }
+    });
   };
 
   const syncShoppingItemsToPantry = async (
@@ -451,7 +563,7 @@ export function PantryProvider({
     if (response.success && response.data) {
       const result = parseSyncResult(response.data);
       const byId = new Map(result.synced.map(i => [i.id, i]));
-      setShoppingList(prev =>
+      commitShoppingList((prev) =>
         prev.map(item => {
           const synced = byId.get(item.id);
           return synced ? { ...item, ...synced, synced_to_pantry: true } : item;
@@ -471,7 +583,7 @@ export function PantryProvider({
     if (response.success && response.data) {
       const result = parseUnsyncResult(response.data);
       const byId = new Map(result.unsynced.map(i => [i.id, i]));
-      setShoppingList(prev =>
+      commitShoppingList((prev) =>
         prev.map(item => {
           const unsynced = byId.get(item.id);
           return unsynced

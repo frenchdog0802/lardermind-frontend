@@ -1,4 +1,3 @@
-import React from 'react';
 import { Clock, ShoppingCart } from 'lucide-react';
 
 interface RecipeCardProps {

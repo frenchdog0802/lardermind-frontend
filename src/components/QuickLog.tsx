@@ -1,7 +1,13 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type ChangeEvent } from 'react';
 import { ArrowLeftIcon, CheckIcon, XIcon, PlusIcon, TrashIcon, SearchIcon, CalendarIcon, ImageIcon, CookingPot } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
-import { IngredientEntry } from '../api/types';
+import type { Recipe } from '../api/types';
+
+type QuickIngredient = {
+  name: string;
+  quantity: number;
+  unit: string;
+};
 interface QuickLogProps {
   onBack: () => void;
   onNavigateToRecipes: () => void;
@@ -15,21 +21,20 @@ export function QuickLog({
     recipes: storedRecipes,
     pantryItems,
     updatePantryItems,
-    addToCookingHistory,
     addRecipe,
     fetchAllRecipes
   } = usePantry();
   const quickMealSuggestions = useMemo(
-    () => storedRecipes.map((item: any) => item.mealName),
+    () => storedRecipes.map((item) => item.meal_name),
     [storedRecipes]
   );
   const [mealName, setMealName] = useState('');
   const [mealType, setMealType] = useState('dinner');
   const [successMessage, setSuccessMessage] = useState('');
-  const [selectedIngredients, setSelectedIngredients] = useState<IngredientEntry[]>([]);
+  const [selectedIngredients, setSelectedIngredients] = useState<QuickIngredient[]>([]);
   const [showIngredientSelector, setShowIngredientSelector] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentIngredient, setCurrentIngredient] = useState<IngredientEntry>({
+  const [currentIngredient, setCurrentIngredient] = useState<QuickIngredient>({
     name: '',
     quantity: 1,
     unit: ''
@@ -62,13 +67,17 @@ export function QuickLog({
   const handleLogMeal = () => {
     if (!mealName.trim()) return;
     // Create a recipe object with ingredients
-    const quickLogRecipe = {
+    const quickLogRecipe: Recipe = {
       id: `quick-log-${Date.now()}`,
-      mealName: mealName,
-      mealType: mealType,
-      ingredients: selectedIngredients,
-      date: selectedDate,
-      image: mealImage //mealImage Include image if exists
+      folder_id: '',
+      meal_name: mealName,
+      instructions: [],
+      ingredients: selectedIngredients.map((ingredient) => ({
+        name: ingredient.name,
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+      })),
+      image: mealImage ? { public_id: '', url: mealImage } : null,
     };
     // Update pantry by decreasing used ingredients
     if (selectedIngredients.length > 0) {
@@ -85,8 +94,6 @@ export function QuickLog({
       // Update pantry
       updatePantryItems(updatedPantry);
     }
-    // Add to cooking history
-    addToCookingHistory(quickLogRecipe);
     addRecipe(quickLogRecipe);
     // Show success message
     setSuccessMessage(`${mealName} added to your cooking log and inventory updated!`);
@@ -121,7 +128,7 @@ export function QuickLog({
     updatedIngredients.splice(index, 1);
     setSelectedIngredients(updatedIngredients);
   };
-  const handleSelectPantryItem = (item: any) => {
+  const handleSelectPantryItem = (item: { name: string; unit: string }) => {
     setCurrentIngredient({
       name: item.name,
       quantity: 1,
@@ -129,7 +136,7 @@ export function QuickLog({
     });
   };
   // Handle image upload
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
