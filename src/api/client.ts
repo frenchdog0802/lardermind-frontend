@@ -1,13 +1,10 @@
 /// <reference types="vite/client" />
 import type { ApiResponse } from './types';
 
-function readApiBaseUrl(): string {
-    const meta = import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } };
-    const value = meta.env?.VITE_API_BASE_URL;
-    return typeof value === 'string' ? value : '';
-}
-
-const BASE_URL = readApiBaseUrl();
+// Must be a direct import.meta.env.VITE_* member expression so Vite inlines at build.
+// Reading via a local `meta` variable is not replaced and leaves BASE_URL empty in prod
+// (guest mint then hits the Pages origin → 405).
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const stored = localStorage.getItem('jwt');
