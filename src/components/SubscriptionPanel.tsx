@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import { subscriptionApi, type SubscriptionStatus } from '../api/subscription';
+import { shouldClearOutboundRedirectLoading } from '../utils/outboundRedirectLoading';
 import { UpgradeButtons } from './UpgradeButtons';
 
 interface SubscriptionPanelProps {
+  /** When false (keep-alive hidden), skip fetch; refetch when becoming true. */
+  active?: boolean;
   checkoutSuccess?: boolean;
   checkoutCancelled?: boolean;
   portalReturn?: boolean;
 }
 
 export function SubscriptionPanel({
+  active = true,
   checkoutSuccess = false,
   checkoutCancelled = false,
   portalReturn = false,
@@ -38,14 +42,19 @@ export function SubscriptionPanel({
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!active) return;
+    void load();
+  }, [active, checkoutSuccess, portalReturn]);
 
   useEffect(() => {
-    if (checkoutSuccess || portalReturn) {
-      load();
-    }
-  }, [checkoutSuccess, portalReturn]);
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (shouldClearOutboundRedirectLoading(event)) {
+        setPortalLoading(false);
+      }
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   const openPortal = async () => {
     setPortalLoading(true);
@@ -102,7 +111,7 @@ export function SubscriptionPanel({
             ? status.isTrial
               ? `Pro trial active until ${formatDate(status.trialEndsAt)}.`
               : `${status.planName ?? 'Pro'} active${status.expiresAt ? ` until ${formatDate(status.expiresAt)}` : ''}.`
-            : 'You are on the Free plan.'}
+            : 'You are on the Free plan. Upgrade anytime for a 7-day Pro trial.'}
         </p>
       </div>
 
@@ -113,11 +122,6 @@ export function SubscriptionPanel({
             label="AI messages today"
             used={usage.aiMessagesUsed}
             limit={usage.aiMessagesLimit}
-          />
-          <UsageRow
-            label="Recipe imports this month"
-            used={usage.recipeImportsUsed}
-            limit={usage.recipeImportsLimit}
           />
           <UsageRow label="Recipes saved" used={usage.recipeCount} limit={usage.recipeLimit} />
           <UsageRow
@@ -148,12 +152,11 @@ export function SubscriptionPanel({
 
       {showUpgrade && (
         <div className="border border-herb bg-sage/20 p-4">
-          <h3 className="font-display text-lg font-semibold text-ink">Upgrade to Pro</h3>
+          <h3 className="font-display text-lg font-semibold text-ink">Start your 7-day Pro trial</h3>
           <p className="mt-2 text-sm text-muted">
-            Pro includes 200 AI messages per day, 50 social/URL imports per month, and unlimited recipes and uploads.
-            New subscribers get a 7-day trial.
+            Try Pro free for 7 days — then 150 AI messages per day and unlimited recipes and uploads.
           </p>
-          <p className="mt-3 text-sm text-muted">$4.99/month or $39.99/year.</p>
+          <p className="mt-3 text-sm text-muted">$4.99/month or $39.99/year after the trial.</p>
           <UpgradeButtons stripeEnabled={stripeEnabled} className="mt-4" />
         </div>
       )}

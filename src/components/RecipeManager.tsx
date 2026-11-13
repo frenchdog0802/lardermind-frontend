@@ -14,6 +14,7 @@ import { AppHeader } from './AppHeader';
 interface RecipeManagerProps {
   onBack: () => void;
   onOpenMenu?: () => void;
+  onAskAi?: (prompt: string) => void;
   selectedRecipeId?: string | null;
   onSelectedRecipeHandled?: () => void;
 }
@@ -21,6 +22,7 @@ interface RecipeManagerProps {
 export function RecipeManager({
   onBack,
   onOpenMenu,
+  onAskAi,
   selectedRecipeId,
   onSelectedRecipeHandled,
 }: RecipeManagerProps) {
@@ -249,7 +251,7 @@ export function RecipeManager({
         return;
       }
 
-      const image_url = res.data.image_url; // Cloudinary URL
+      const image_url = res.data.image_url; // R2 media URL from /api/upload/image
 
       if (isEditing && selectedRecipe) {
         setSelectedRecipe({
@@ -572,6 +574,14 @@ export function RecipeManager({
                   <p className="text-muted text-sm mt-1">
                     {t('common.tryDifferentSearch')}
                   </p>
+                ) : onAskAi ? (
+                  <button
+                    type="button"
+                    onClick={() => onAskAi(t('ai.emptyPrompts.pasteList'))}
+                    className="mt-3 text-sm font-medium text-herb hover:underline"
+                  >
+                    {t('recipes.emptyAskAi')}
+                  </button>
                 ) : null}
               </div> : <ul className="divide-y divide-line">
                 {filteredRecipes.map(recipe => <li key={recipe.id} className="p-4">

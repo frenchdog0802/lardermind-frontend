@@ -293,14 +293,14 @@
     "emptyCta": {
       "pantry": "請 AI 更新冰箱",
       "shopping": "請 AI 建立購物清單",
-      "recipes": "請 AI 匯入食譜",
+      "recipes": "請 AI 建立食譜",
       "calendar": "請 AI 規劃本週",
       "pasteList": "貼清單請 AI 幫忙"
     },
     "emptyPrompts": {
       "pantry": "把雞胸肉、米和花椰菜加入冰箱",
       "shopping": "把牛奶、雞蛋和麵包加入購物清單",
-      "recipes": "從網址匯入食譜（網站、YouTube 或 Instagram）",
+      "recipes": "用雞胸肉、米和花椰菜建立一道簡單平日晚餐食譜",
       "calendar": "幫我規劃這週剩下的晚餐",
       "cook": "我現有的食材可以煮什麼？",
       "pasteList": "我冰箱裡有：\n- 雞胸肉\n- 米\n- 花椰菜\n- 醬油\n\n請加入食材庫，建議可用食譜，再告訴我能煮什麼。"
@@ -309,7 +309,7 @@
       "我冰箱裡有：\n- 雞胸肉\n- 米\n- 花椰菜\n- 醬油\n\n請加入食材庫，建議可用食譜，再告訴我能煮什麼。",
       "我現有的食材可以煮什麼？",
       "幫我規劃這週剩下的晚餐",
-      "從網址匯入食譜（網站、YouTube 或 Instagram）"
+      "用雞胸肉、米和花椰菜建立一道簡單平日晚餐食譜"
     ],
     "suggestedPromptCards": [
       {
@@ -325,22 +325,27 @@
         "prompt": "幫我規劃這週剩下的晚餐"
       },
       {
-        "title": "匯入食譜",
-        "prompt": "從網址匯入食譜（網站、YouTube 或 Instagram）"
+        "title": "建立食譜",
+        "prompt": "用雞胸肉、米和花椰菜建立一道簡單平日晚餐食譜"
       }
     ],
-    "guestWelcome": "貼上冰箱或購物清單，我幫你建議能煮什麼。這次試用不用註冊。",
+    "guestWelcome": "貼上冰箱或購物清單，我幫你建議能煮什麼。訪客試用：每天 5 則 AI 訊息。不用註冊。",
     "guestTryTitle": "試試助理",
-    "guestBadge": "即時試用",
+    "guestBadge": "即時試用 · 每天 5 則",
     "guestMintFailed": "無法開始訪客試用。",
+    "guestStarting": "正在啟動試用…",
     "guestSignUpInstead": "改為註冊",
+    "quotaUpsellGuest": "今日訪客 AI 訊息已用完。免費註冊即可繼續 — 升級還可享 7 天 Pro 試用。",
+    "quotaUpsellGuestCta": "免費註冊",
+    "quotaUpsellFree": "今日免費方案 AI 上限已到。開始 7 天 Pro 試用，每天 150 則訊息。",
+    "quotaUpsellFreeCta": "開始 7 天 Pro 試用",
     "guestApproveTitle": "確認套用這些變更？",
     "guestApprove": "確認",
     "guestReject": "拒絕",
     "guestSavePrompt": "覺得有用的話，註冊可保留冰箱、食譜、計畫與這次對話。",
     "guestSaveCta": "保存我的廚房",
     "guestReset": "重設對話",
-    "guestFooter": "訪客試用 — 註冊可保留冰箱、食譜與廚房進度。",
+    "guestFooter": "訪客試用：每天 5 則 AI 訊息 — 免費註冊可繼續（升級可享 7 天 Pro 試用）。"
     "demoWelcome": "試試下方提示，或自己輸入。",
     "demoSuggestedPrompts": [
       "我現有的食材可以煮什麼？",

@@ -42,9 +42,18 @@ describe('ChatComposer chrome ownership', () => {
     assert.match(src, /border:\s*['"]none['"]/, 'inline border none required');
     assert.match(src, /outline:\s*['"]none['"]/, 'inline outline none required');
     assert.match(src, /boxShadow:\s*['"]none['"]/, 'inline boxShadow none required');
-    const textareaMatch = src.match(/<textarea\b[\s\S]*?className="([^"]*)"/);
+    const textareaMatch =
+      src.match(/<textarea\b[\s\S]*?className="([^"]*)"/) ||
+      src.match(/<textarea\b[\s\S]*?className=\{`([\s\S]*?)`\}/);
     assert.ok(textareaMatch, 'expected textarea className');
     assert.match(textareaMatch[1], /\bborder-0\b/);
     assert.match(textareaMatch[1], /\bfocus-visible:outline-none\b/);
+  });
+
+  it('supports optional onAttach paperclip control', () => {
+    const src = readChatComposerSource();
+    assert.match(src, /onAttach\?:/);
+    assert.match(src, /PaperclipIcon/);
+    assert.match(src, /\{onAttach \?/);
   });
 });

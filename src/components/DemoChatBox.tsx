@@ -193,9 +193,9 @@ export function DemoChatBox({
               <div className="flex justify-start">
                 <div className="rounded-2xl border border-line bg-sage/40 px-4 py-3">
                   <div className="flex space-x-1.5">
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-muted/70 [animation-delay:0ms]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-muted/70 [animation-delay:150ms]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-muted/70 [animation-delay:300ms]" />
+                    <span className="h-2 w-2 animate-typing-dot rounded-full bg-muted/70 [animation-delay:0ms]" />
+                    <span className="h-2 w-2 animate-typing-dot rounded-full bg-muted/70 [animation-delay:120ms]" />
+                    <span className="h-2 w-2 animate-typing-dot rounded-full bg-muted/70 [animation-delay:240ms]" />
                   </div>
                 </div>
               </div>

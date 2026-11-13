@@ -14,7 +14,7 @@ import { AICookingAssistant } from './components/AICookingAssistant';
 import { AppDrawer, type AppDrawerView } from './components/AppDrawer';
 import { SubscriptionView } from './components/SubscriptionView';
 import { MarketingLanding } from './components/MarketingLanding';
-import { SetupGuide } from './components/SetupGuide';
+import { clearSetupGuideLocalStorage } from './utils/setupGuide';
 import { useMediaQuery } from './hooks/useMediaQuery';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
@@ -46,6 +46,10 @@ function AppContent() {
     initializing,
     redirectError,
   } = useAuth();
+
+  useEffect(() => {
+    clearSetupGuideLocalStorage();
+  }, []);
 
   useEffect(() => {
     if (initializing) return;
@@ -191,6 +195,7 @@ function AppContent() {
             onViewShoppingList={navigateToShoppingList}
             onViewCalendar={navigateToCalendar}
             onViewPantry={navigateToPantryInventory}
+            onViewSubscription={() => setCurrentView('subscription')}
           />
         </div>
       )}
@@ -210,6 +215,7 @@ function AppContent() {
           <RecipeManager
             onBack={navigateToAiAssistant}
             onOpenMenu={menuOpener}
+            onAskAi={navigateToAiAssistant}
             selectedRecipeId={selectedRecipeId}
             onSelectedRecipeHandled={() => setSelectedRecipeId(null)}
           />
@@ -218,6 +224,7 @@ function AppContent() {
       {showKeepAlive('settings') && (
         <div className={currentView === 'settings' ? undefined : 'hidden'} aria-hidden={currentView !== 'settings'}>
           <Settings
+            active={currentView === 'settings'}
             onBack={navigateToAiAssistant}
             onOpenMenu={menuOpener}
           />
@@ -229,6 +236,7 @@ function AppContent() {
           aria-hidden={currentView !== 'subscription'}
         >
           <SubscriptionView
+            active={currentView === 'subscription'}
             onOpenMenu={menuOpener}
             checkoutSuccess={subscriptionNotice === 'success'}
             checkoutCancelled={subscriptionNotice === 'cancelled'}
@@ -244,6 +252,7 @@ function AppContent() {
           <PantryInventory
             onBack={navigateToAiAssistant}
             onOpenMenu={menuOpener}
+            onAskAi={navigateToAiAssistant}
           />
         </div>
       )}
@@ -255,6 +264,7 @@ function AppContent() {
           <ShoppingList
             onBack={navigateToAiAssistant}
             onOpenMenu={menuOpener}
+            onAskAi={navigateToAiAssistant}
           />
         </div>
       )}
@@ -263,16 +273,6 @@ function AppContent() {
       )}
       </div>
 
-      {!isGuestView && isDesktopRail && (
-        <SetupGuide
-          onNavigate={handleDrawerNavigate}
-          onAskAi={(prompt) => {
-            setPendingAiPrompt(prompt);
-            setRequestNewChat(false);
-            setCurrentView('aiAssistant');
-          }}
-        />
-      )}
     </div>
   );
 }

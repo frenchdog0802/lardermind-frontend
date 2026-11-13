@@ -293,14 +293,14 @@
     "emptyCta": {
       "pantry": "Ask AI to update pantry",
       "shopping": "Ask AI to build a list",
-      "recipes": "Ask AI to import a recipe",
+      "recipes": "Ask AI to create a recipe",
       "calendar": "Ask AI to plan this week",
       "pasteList": "Ask AI with a pasted list"
     },
     "emptyPrompts": {
       "pantry": "Add chicken, rice, and broccoli to my pantry",
       "shopping": "Add milk, eggs, and bread to my shopping list",
-      "recipes": "Import a recipe from a URL (website, YouTube, or Instagram)",
+      "recipes": "Create a simple weeknight recipe from chicken, rice, and broccoli",
       "calendar": "Plan dinners for the rest of this week",
       "cook": "What can I cook with what I have?",
       "pasteList": "Here’s what’s in my fridge:\n- chicken breast\n- rice\n- broccoli\n- soy sauce\n\nAdd these to my pantry, suggest recipes I can make, then tell me what I can cook."
@@ -309,7 +309,7 @@
       "Here’s what’s in my fridge:\n- chicken breast\n- rice\n- broccoli\n- soy sauce\n\nAdd these to my pantry, suggest recipes I can make, then tell me what I can cook.",
       "What can I cook with what I have?",
       "Plan dinners for the rest of this week",
-      "Import a recipe from a URL (website, YouTube, or Instagram)"
+      "Create a simple weeknight recipe from chicken, rice, and broccoli"
     ],
     "suggestedPromptCards": [
       {
@@ -325,22 +325,27 @@
         "prompt": "Plan dinners for the rest of this week"
       },
       {
-        "title": "Import a recipe",
-        "prompt": "Import a recipe from a URL (website, YouTube, or Instagram)"
+        "title": "Create a recipe",
+        "prompt": "Create a simple weeknight recipe from chicken, rice, and broccoli"
       }
     ],
-    "guestWelcome": "Paste what’s in your fridge — I’ll suggest what you can cook. No account needed for this try.",
+    "guestWelcome": "Paste what’s in your fridge — I’ll suggest what you can cook. Guest demo: 5 AI messages / day. No account needed.",
     "guestTryTitle": "Try the assistant",
-    "guestBadge": "Live try",
+    "guestBadge": "Live try · 5 msgs/day",
     "guestMintFailed": "Couldn’t start a guest session.",
+    "guestStarting": "Starting demo…",
     "guestSignUpInstead": "Sign up instead",
+    "quotaUpsellGuest": "You’ve used today’s guest AI messages. Sign up free to keep going — and start a 7-day Pro trial when you upgrade.",
+    "quotaUpsellGuestCta": "Sign up free",
+    "quotaUpsellFree": "You’ve hit today’s Free AI limit. Start a 7-day Pro trial for 150 messages/day.",
+    "quotaUpsellFreeCta": "Start 7-day Pro trial",
     "guestApproveTitle": "Approve these changes?",
     "guestApprove": "Approve",
     "guestReject": "Reject",
     "guestSavePrompt": "Looks useful — save to keep pantry, recipes, plans, and this chat.",
     "guestSaveCta": "Save my kitchen",
     "guestReset": "Reset chat",
-    "guestFooter": "Guest trial — save to keep pantry, recipes, and this kitchen.",
+    "guestFooter": "Guest demo: 5 AI messages / day — sign up free to keep going (7-day Pro trial when you upgrade).",
     "demoWelcome": "Try a prompt below, or type your own.",
     "demoSuggestedPrompts": [
       "What can I cook with what I have?",

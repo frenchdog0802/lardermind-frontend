@@ -12,6 +12,8 @@ import { AppLanguage, persistLanguage } from '../i18n';
 interface SettingsProps {
   onBack: () => void;
   onOpenMenu?: () => void;
+  /** False while keep-alive-hidden so subscription usage can refetch on show. */
+  active?: boolean;
   checkoutSuccess?: boolean;
   checkoutCancelled?: boolean;
 }
@@ -37,7 +39,13 @@ function textToList(value: string): string[] {
     .filter(Boolean);
 }
 
-export function Settings({ onBack: _onBack, onOpenMenu, checkoutSuccess = false, checkoutCancelled = false }: SettingsProps) {
+export function Settings({
+  onBack: _onBack,
+  onOpenMenu,
+  active = true,
+  checkoutSuccess = false,
+  checkoutCancelled = false,
+}: SettingsProps) {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
   const { userSettings, updateUserSettings } = usePantry();
@@ -323,6 +331,7 @@ export function Settings({ onBack: _onBack, onOpenMenu, checkoutSuccess = false,
 
             {activeTab === 'subscription' && (
               <SubscriptionPanel
+                active={active}
                 checkoutSuccess={checkoutSuccess}
                 checkoutCancelled={checkoutCancelled}
               />

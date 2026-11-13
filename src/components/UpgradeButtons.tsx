@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { subscriptionApi } from '../api/subscription';
+import { shouldClearOutboundRedirectLoading } from '../utils/outboundRedirectLoading';
 
 interface UpgradeButtonsProps {
   stripeEnabled: boolean;
@@ -9,6 +10,16 @@ interface UpgradeButtonsProps {
 export function UpgradeButtons({ stripeEnabled, className = '' }: UpgradeButtonsProps) {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (shouldClearOutboundRedirectLoading(event)) {
+        setLoadingPlan(null);
+      }
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   const startCheckout = async (billingPeriod: 'monthly' | 'yearly') => {
     setLoadingPlan(billingPeriod);

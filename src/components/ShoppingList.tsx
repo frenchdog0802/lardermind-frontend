@@ -13,6 +13,7 @@ import type { MeasurementSystem } from '../utils/units';
 interface ShoppingListProps {
     onBack: () => void;
     onOpenMenu?: () => void;
+    onAskAi?: (prompt: string) => void;
 }
 
 type ReviewDraft = {
@@ -24,7 +25,7 @@ type ReviewDraft = {
     hasIngredient: boolean;
 };
 
-export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps) {
+export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingListProps) {
     const { t } = useTranslation();
     const {
         shoppingList: oriShoppingList,
@@ -491,6 +492,14 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu }: ShoppingListProps)
                                 <p className="text-muted">{t('shopping.empty')}</p>
                                 {shoppingSearchQuery ? (
                                     <p className="text-muted text-sm mt-1">Try a different search term</p>
+                                ) : onAskAi ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onAskAi(t('ai.emptyPrompts.pasteList'))}
+                                        className="mt-3 text-sm font-medium text-herb hover:underline"
+                                    >
+                                        {t('shopping.emptyAskAi')}
+                                    </button>
                                 ) : null}
                             </div>
                         ) : (

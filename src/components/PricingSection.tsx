@@ -16,7 +16,7 @@ const FALLBACK_PLANS: PlansResponse = {
     imageUploadsPerMonth: 10,
   },
   pro: {
-    aiMessagesPerDay: 200,
+    aiMessagesPerDay: 150,
     recipeImportsPerMonth: 50,
     maxRecipes: -1,
     imageUploadsPerMonth: -1,
@@ -83,12 +83,12 @@ export function PricingSection({ onGetStarted }: PricingSectionProps) {
             Free vs Pro
           </h2>
           <p className="mt-3 text-lg text-muted">
-            Full kitchen management on Free. Pro raises daily AI chat, recipe imports, and upload
-            limits — from {free.aiMessagesPerDay} to {pro.aiMessagesPerDay} messages/day.
+            Full kitchen management on Free. Pro raises daily AI chat and upload limits — from{' '}
+            {free.aiMessagesPerDay} to {pro.aiMessagesPerDay} messages/day.
           </p>
           {plans.trialDays ? (
             <p className="mt-2 text-sm text-herb">
-              New accounts get {plans.trialDays} days of Pro to try everything.
+              Start a {plans.trialDays}-day Pro trial when you upgrade.
             </p>
           ) : null}
         </div>
@@ -101,10 +101,6 @@ export function PricingSection({ onGetStarted }: PricingSectionProps) {
             <ul className="mt-8">
               <LimitRow label="Pantry, shopping, calendar" value="Full access" />
               <LimitRow label="AI chat" value={`${free.aiMessagesPerDay} / day`} />
-              <LimitRow
-                label="URL / YouTube / Instagram import"
-                value={`${free.recipeImportsPerMonth} / month`}
-              />
               <LimitRow label="Recipes" value={`Up to ${free.maxRecipes}`} />
               <LimitRow label="Image uploads" value={`${free.imageUploadsPerMonth} / month`} />
             </ul>
@@ -123,10 +119,6 @@ export function PricingSection({ onGetStarted }: PricingSectionProps) {
               </p>
               <ul className="mt-8">
                 <LimitRow label="AI chat" value={`${pro.aiMessagesPerDay} / day`} />
-                <LimitRow
-                  label="Social / URL imports"
-                  value={`${pro.recipeImportsPerMonth} / month`}
-                />
                 <LimitRow label="Recipes" value={formatLimit(pro.maxRecipes)} />
                 <LimitRow label="Image uploads" value={formatLimit(pro.imageUploadsPerMonth)} />
                 <LimitRow label="Priority support" value="Included" />

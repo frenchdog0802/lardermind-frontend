@@ -57,7 +57,7 @@ describe('web HITL pending must stay actionable', () => {
     const src = readFileSync(join(root, 'src/components/AICookingAssistant.tsx'), 'utf8');
     assert.match(
       src,
-      /disabled=\{isTyping\s*\|\|\s*Boolean\(pendingApproval\)\}/,
+      /disabled=\{isTyping\s*\|\|\s*Boolean\(pendingApproval\)/,
       'composer must block send while HITL approval is pending (mobile parity)',
     );
   });

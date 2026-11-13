@@ -1,21 +1,40 @@
-import { useState, useEffect, useMemo } from 'react';
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  type ChangeEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import { PlusIcon, MinusIcon, TrashIcon, SearchIcon, PackageIcon } from 'lucide-react';
+import {
+  PlusIcon,
+  MinusIcon,
+  TrashIcon,
+  SearchIcon,
+  PackageIcon,
+  CameraIcon,
+} from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { IngredientEntry, PantryItem } from '../api/types';
+import {
+  pantryVisionApi,
+  type RecognizedPantryItem,
+} from '../api/pantryVision';
 import useSearchIngredients from '../hooks/useSearchIngredient';
 import { NumberInput } from './NumberInput';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
 import { AppHeader } from './AppHeader';
-import { isAscii } from '../utils/isAscii';
+import { PantryImageReviewModal } from './PantryImageReviewModal';
 import type { MeasurementSystem } from '../utils/units';
 
 interface PantryInventoryProps {
     onBack: () => void;
     onOpenMenu?: () => void;
+    onAskAi?: (prompt: string) => void;
 }
 
-export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventoryProps) {
+export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: PantryInventoryProps) {
     const { t } = useTranslation();
     const {
         pantryItems: oriPantryItems,
@@ -37,7 +56,14 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventory
     });
     const [showDropdown, setShowDropdown] = useState(false);
     const [isAddingItem, setIsAddingItem] = useState(false);
-    const [selectedIndex, setSelectedIndex] = useState(-1);  // ???????????????
+    const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [recognizing, setRecognizing] = useState(false);
+    const [recognizeError, setRecognizeError] = useState<string | null>(null);
+    const [reviewOpen, setReviewOpen] = useState(false);
+    const [reviewItems, setReviewItems] = useState<RecognizedPantryItem[]>([]);
+    const [reviewPreviewUrl, setReviewPreviewUrl] = useState<string | null>(null);
+    const [reviewEmptyMessage, setReviewEmptyMessage] = useState<string | null>(null);
+    const visionInputRef = useRef<HTMLInputElement>(null);
 
     // Pantry item search dropdown????? name???? debounce??
     const { filteredIngredients: filteredPantryIngredients, loading: pantryLoading } = useSearchIngredients(
@@ -70,7 +96,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventory
         return pantryItems.filter(item => {
             const name = item.name ?? '';
             if (!name) return !searchQuery;
-            const isEnglish = isAscii(name);
+            const isEnglish = /^[\x00-\x7F]*$/.test(name);
             const matchesSearch = isEnglish
                 ? name.toLowerCase().includes(searchQuery.toLowerCase())
                 : name.includes(searchQuery);
@@ -150,6 +176,48 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventory
         [filteredItems]
     );
 
+    const closeReviewModal = useCallback(() => {
+        setReviewOpen(false);
+        setReviewItems([]);
+        setReviewEmptyMessage(null);
+        if (reviewPreviewUrl) {
+            URL.revokeObjectURL(reviewPreviewUrl);
+            setReviewPreviewUrl(null);
+        }
+    }, [reviewPreviewUrl]);
+
+    const handleVisionFileChange = useCallback(
+        async (e: ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+
+            const previewUrl = URL.createObjectURL(file);
+            setRecognizing(true);
+            setRecognizeError(null);
+            try {
+                const res = await pantryVisionApi.recognize(file);
+                if (!res.success || !res.data) {
+                    URL.revokeObjectURL(previewUrl);
+                    setRecognizeError(
+                        res.message || t('pantryVision.errorRecognize'),
+                    );
+                    return;
+                }
+                setReviewItems(res.data.items ?? []);
+                setReviewEmptyMessage(res.data.message ?? null);
+                setReviewPreviewUrl(previewUrl);
+                setReviewOpen(true);
+            } catch {
+                URL.revokeObjectURL(previewUrl);
+                setRecognizeError(t('pantryVision.errorRecognize'));
+            } finally {
+                setRecognizing(false);
+            }
+        },
+        [t],
+    );
+
     return (
         <div className="flex flex-col w-full min-h-screen bg-linen">
             <AppHeader
@@ -164,6 +232,15 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventory
             />
             <div className="flex-1 overflow-y-auto">
                 <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 py-6">
+                    <input
+                        ref={visionInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                            void handleVisionFileChange(e);
+                        }}
+                    />
                     <div className="relative mb-4">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <SearchIcon size={18} className="text-muted" />
@@ -176,6 +253,36 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventory
                             className="w-full pl-10 pr-4 py-3 rounded-xl border border-line focus:outline-none focus:ring-2 focus:ring-herb/30 focus:border-transparent"
                         />
                     </div>
+
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => visionInputRef.current?.click()}
+                            disabled={recognizing}
+                            className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-sage/40 disabled:opacity-60"
+                        >
+                            <CameraIcon size={16} />
+                            {recognizing
+                                ? t('common.loading')
+                                : t('pantryVision.scan')}
+                        </button>
+                        {recognizeError ? (
+                            <p className="text-sm text-danger" role="alert">
+                                {recognizeError}
+                            </p>
+                        ) : null}
+                    </div>
+
+                    <PantryImageReviewModal
+                        open={reviewOpen}
+                        items={reviewItems}
+                        imagePreviewUrl={reviewPreviewUrl}
+                        emptyMessage={reviewEmptyMessage}
+                        onClose={closeReviewModal}
+                        onApplied={() => {
+                            void fetchAllPantryItems();
+                        }}
+                    />
 
                     {!isAddingItem ? (
                         <button
@@ -317,6 +424,14 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu }: PantryInventory
                             <p className="text-ink font-medium">{t('pantry.empty')}</p>
                             {searchQuery ? (
                                 <p className="text-muted text-sm mt-1">{t('common.tryDifferentSearch')}</p>
+                            ) : onAskAi ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onAskAi(t('ai.emptyPrompts.pasteList'))}
+                                    className="mt-4 text-sm font-medium text-herb hover:underline"
+                                >
+                                    {t('pantry.emptyAskAi')}
+                                </button>
                             ) : null}
                         </div>
                     ) : (

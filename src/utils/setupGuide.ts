@@ -1,6 +1,16 @@
 export const SETUP_GUIDE_DISMISSED_KEY = 'lardermind.setupGuide.dismissed';
 export const SETUP_GUIDE_CHAT_KEY = 'lardermind.setupGuide.chatStarted';
 
+/** Setup Guide retired (first-win-bootstrap). Clear legacy keys. */
+export function clearSetupGuideLocalStorage(): void {
+  try {
+    localStorage.removeItem(SETUP_GUIDE_DISMISSED_KEY);
+    localStorage.removeItem(SETUP_GUIDE_CHAT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export type SetupGuideStepId =
   | 'pantry'
   | 'recipes'

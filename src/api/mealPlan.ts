@@ -1,5 +1,5 @@
 import { api } from './client';
-import { ConfirmMealPlanResult, MealPlan } from './types';
+import { ConfirmMealPlanResult, MealPlan, MealPlanAvailabilityResult } from './types';
 
 export const mealPlanApi = {
     list: (query?: string) =>
@@ -11,6 +11,11 @@ export const mealPlanApi = {
 
     pendingConfirm: () =>
         api.get<{ mealPlans?: MealPlan[] } | MealPlan[]>('/api/meal-plan/pending-confirm'),
+
+    availability: (from: string, to: string) =>
+        api.get<MealPlanAvailabilityResult>(
+            `/api/meal-plan/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        ),
 
     create: (data: Partial<MealPlan>) => api.post<MealPlan | { mealPlan?: MealPlan }>('/api/meal-plan', data),
 

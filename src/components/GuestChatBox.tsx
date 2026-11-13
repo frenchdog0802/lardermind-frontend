@@ -11,12 +11,15 @@ import {
   readGuestToken,
   writeGuestToken,
 } from '../utils/guestSession';
+import { isQuotaExceededMessage } from '../utils/quotaExceeded';
 
 interface GuestChatBoxProps {
   onGetStarted: () => void;
   showHeader?: boolean;
   size?: 'default' | 'large';
   className?: string;
+  /** When set, UI strings ignore global appLanguage (marketing landing stays English). */
+  fixedLanguage?: 'en' | 'zh';
 }
 
 interface GuestMessage {
@@ -54,19 +57,18 @@ export function GuestChatBox({
   showHeader = true,
   size = 'default',
   className = '',
+  fixedLanguage,
 }: GuestChatBoxProps) {
-  const { t, i18n } = useTranslation();
+  const { t: tGlobal, i18n } = useTranslation();
+  const t = useMemo(
+    () => (fixedLanguage ? i18n.getFixedT(fixedLanguage) : tGlobal),
+    [fixedLanguage, i18n, tGlobal, i18n.language],
+  );
   const [guestToken, setGuestToken] = useState<string | null>(() => readGuestToken());
   const [mintError, setMintError] = useState<string | null>(null);
   const [minting, setMinting] = useState(!readGuestToken());
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<GuestMessage[]>(() => [
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: t('ai.guestWelcome'),
-    },
-  ]);
+  const [messages, setMessages] = useState<GuestMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<{
@@ -76,13 +78,28 @@ export function GuestChatBox({
   const [showSaveCta, setShowSaveCta] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 0 || (prev.length === 1 && prev[0]?.id === 'welcome')) {
+        return [
+          {
+            id: 'welcome',
+            role: 'assistant',
+            content: t('ai.guestWelcome'),
+          },
+        ];
+      }
+      return prev;
+    });
+  }, [t]);
+
   const suggestedPrompts = useMemo(() => {
     const cards = t('ai.suggestedPromptCards', { returnObjects: true });
     if (Array.isArray(cards)) {
       return (cards as { title: string; prompt: string }[]).slice(0, 2);
     }
     return [];
-  }, [t, i18n.language]);
+  }, [t]);
 
   const authOpts = useMemo(
     () => (guestToken ? { bearerToken: guestToken } : undefined),
@@ -247,15 +264,17 @@ export function GuestChatBox({
             }
           },
           onError: (message) => {
+            const quota = isQuotaExceededMessage(message);
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
                   ? {
                       ...m,
-                      content:
-                        message ||
-                        'Something went wrong. Please try again.',
-                      type: 'error',
+                      content: quota
+                        ? t('ai.quotaUpsellGuest')
+                        : message ||
+                          'Something went wrong. Please try again.',
+                      type: quota ? 'quota_upsell' : 'error',
                     }
                   : m,
               ),
@@ -372,7 +391,9 @@ export function GuestChatBox({
                   className={`max-w-[88%] rounded-2xl px-3 py-2.5 text-sm leading-relaxed ${
                     message.role === 'user'
                       ? 'bg-herb text-white'
-                      : 'border border-line bg-sage/40 text-ink'
+                      : message.type === 'quota_upsell'
+                        ? 'border border-herb bg-sage/30 text-ink'
+                        : 'border border-line bg-sage/40 text-ink'
                   }`}
                 >
                   {message.content
@@ -380,6 +401,15 @@ export function GuestChatBox({
                     : isTyping && message.type === 'streaming'
                       ? null
                       : null}
+                  {message.type === 'quota_upsell' ? (
+                    <button
+                      type="button"
+                      onClick={onGetStarted}
+                      className="mt-3 block w-full rounded-lg bg-herb px-3 py-2 text-sm font-medium text-white"
+                    >
+                      {t('ai.quotaUpsellGuestCta')}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -444,11 +474,16 @@ export function GuestChatBox({
         </div>
 
         <form onSubmit={handleSubmit} className="border-t border-line p-3">
+          {(minting || !guestToken) && !mintError ? (
+            <p className="mb-2 text-center text-xs text-muted" aria-live="polite">
+              {t('ai.guestStarting')}
+            </p>
+          ) : null}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleReset}
-              disabled={isTyping}
+              disabled={isTyping || busy}
               className="rounded-full p-2 text-muted transition-colors hover:bg-sage/50 hover:text-ink disabled:opacity-50"
               title={t('ai.guestReset')}
               aria-label={t('ai.guestReset')}
@@ -460,7 +495,9 @@ export function GuestChatBox({
                 type="text"
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value)}
-                placeholder={t('ai.placeholder')}
+                placeholder={
+                  minting || !guestToken ? t('ai.guestStarting') : t('ai.placeholder')
+                }
                 className="w-full rounded-xl border border-line px-4 py-2.5 pr-11 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-herb/30"
                 disabled={busy}
               />

@@ -24,6 +24,7 @@ export default {
       animation: {
         'fade-up': 'fadeUp 0.28s ease-out forwards',
         'fade-in': 'fadeIn 0.2s ease-out forwards',
+        'typing-dot': 'typingDot 0.56s ease-in-out infinite',
       },
       keyframes: {
         fadeUp: {
@@ -33,6 +34,10 @@ export default {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        typingDot: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-5px)' },
         },
       },
     },

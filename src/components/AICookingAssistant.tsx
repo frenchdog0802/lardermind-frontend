@@ -1,22 +1,33 @@
-﻿import { useEffect, useState, useRef, useMemo } from 'react';
+﻿import {
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+  type ChangeEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { chatApi, ChatResponse, ChatSession, HistoryMessage, PendingToolSummary } from '../api/chat';
 import { classifyChatResume, readInterruptId } from '../api/resumeOutcome';
 import { mealPlanApi } from '../api/mealPlan';
+import {
+  pantryVisionApi,
+  type RecognizedPantryItem,
+} from '../api/pantryVision';
 import { RecipeSuggestion } from '../api/types';
 import ChatMessageContent from './ChatMessageContent';
 import { ChatComposer } from './ChatComposer';
 import { AppHeader } from './AppHeader';
 import { ChatEmptyState, SuggestedPromptCard } from './ChatEmptyState';
 import { Loading } from './Loading';
+import { PantryImageReviewModal } from './PantryImageReviewModal';
 import {
   resolveChatBodyMode,
   resolveChatHeaderIsNewChat,
 } from '../utils/chatBootstrapGate';
-import { markSetupGuideChatStarted } from '../utils/setupGuide';
-
+import { isQuotaExceededMessage } from '../utils/quotaExceeded';
 interface AICookingAssistantProps {
   /** When false, the view is hidden but stays mounted so streams keep running. */
   isActive?: boolean;
@@ -33,6 +44,7 @@ interface AICookingAssistantProps {
   onViewShoppingList?: () => void;
   onViewCalendar?: () => void;
   onViewPantry?: () => void;
+  onViewSubscription?: () => void;
 }
 
 type MessageType =
@@ -50,7 +62,8 @@ type MessageType =
   | 'interrupt'
   | 'system'
   | 'confirmation'
-  | 'error';
+  | 'error'
+  | 'quota_upsell';
 
 interface ResponseCardData {
   recipeId?: string;
@@ -68,7 +81,14 @@ interface ResponseCardData {
   meals?: Array<{ meal_name?: string; serving_date?: string; meal_type?: string }>;
   mergedGroups?: number;
   removedDuplicates?: number;
-  suggestions?: Array<{ recipeId?: string; recipeName?: string; matchScore?: number; missingIngredients?: string[] }>;
+  suggestions?: Array<{
+    recipeId?: string;
+    recipeName?: string;
+    matchScore?: number;
+    missingIngredients?: string[];
+    /** Legacy backend field; prefer recipeName */
+    meal_name?: string;
+  }>;
   actionCount?: number;
   actions?: Array<Record<string, unknown>>;
   message?: string;
@@ -125,6 +145,7 @@ export function AICookingAssistant({
   onViewShoppingList,
   onViewCalendar,
   onViewPantry,
+  onViewSubscription,
 }: AICookingAssistantProps) {
   const { t, i18n } = useTranslation();
   const {
@@ -150,8 +171,15 @@ export function AICookingAssistant({
   } | null>(null);
   const [resumeInFlight, setResumeInFlight] = useState(false);
   const resumeLock = useRef(false);
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognizeError, setRecognizeError] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewItems, setReviewItems] = useState<RecognizedPantryItem[]>([]);
+  const [reviewPreviewUrl, setReviewPreviewUrl] = useState<string | null>(null);
+  const [reviewEmptyMessage, setReviewEmptyMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   const suggestedPromptCards = useMemo(() => {
     const raw = t('ai.suggestedPromptCards', { returnObjects: true });
@@ -482,7 +510,7 @@ export function AICookingAssistant({
             onClick={() => void handleResume('approve')}
             className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-50"
           >
-            Approve
+            {resumeInFlight ? 'Applying…' : 'Approve'}
           </button>
           <button
             type="button"
@@ -591,17 +619,20 @@ export function AICookingAssistant({
             setSuggestedRecipes([]);
           },
           onError: (message) => {
-            const errorText =
-              message ||
-              "I'm sorry, I'm having trouble connecting to my cooking brain right now. Please try again in a moment.";
+            const quota = isQuotaExceededMessage(message);
+            const errorText = quota
+              ? t('ai.quotaUpsellFree')
+              : message ||
+                "I'm sorry, I'm having trouble connecting to my cooking brain right now. Please try again in a moment.";
             settleStreaming((entry) => ({
               ...entry,
-              type: 'error',
+              type: quota ? 'quota_upsell' : 'error',
               content: errorText,
               streaming: false,
               statusText: undefined,
             }));
             if (
+              !quota &&
               /pending action waiting for your approval/i.test(errorText) &&
               activeSessionId
             ) {
@@ -763,7 +794,6 @@ export function AICookingAssistant({
   // Handle sending a message
   const handleSendMessage = () => {
     if (!inputValue.trim() || isTyping || pendingApproval) return;
-    markSetupGuideChatStarted();
     // Add user message
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -806,15 +836,93 @@ export function AICookingAssistant({
   };
   const isEmptyStage = !selectedRecipe && chatBodyMode === 'empty';
 
+  const closeReviewModal = useCallback(() => {
+    setReviewOpen(false);
+    setReviewItems([]);
+    setReviewEmptyMessage(null);
+    if (reviewPreviewUrl) {
+      URL.revokeObjectURL(reviewPreviewUrl);
+      setReviewPreviewUrl(null);
+    }
+  }, [reviewPreviewUrl]);
+
+  const handleAttachPantryImage = useCallback(() => {
+    if (recognizing || isTyping || pendingApproval) return;
+    setRecognizeError(null);
+    attachInputRef.current?.click();
+  }, [recognizing, isTyping, pendingApproval]);
+
+  const handleAttachFileChange = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+
+      const previewUrl = URL.createObjectURL(file);
+      setRecognizing(true);
+      setRecognizeError(null);
+      try {
+        const res = await pantryVisionApi.recognize(file);
+        if (!res.success || !res.data) {
+          URL.revokeObjectURL(previewUrl);
+          setRecognizeError(
+            res.message || t('pantryVision.errorRecognize'),
+          );
+          return;
+        }
+        setReviewItems(res.data.items ?? []);
+        setReviewEmptyMessage(res.data.message ?? null);
+        setReviewPreviewUrl(previewUrl);
+        setReviewOpen(true);
+      } catch {
+        URL.revokeObjectURL(previewUrl);
+        setRecognizeError(t('pantryVision.errorRecognize'));
+      } finally {
+        setRecognizing(false);
+      }
+    },
+    [t],
+  );
+
   const composerField = (
-    <ChatComposer
-      ref={inputRef}
-      value={inputValue}
-      onChange={setInputValue}
-      onSend={handleSendMessage}
-      disabled={isTyping || Boolean(pendingApproval)}
-      ariaLabel={t('ai.title')}
-    />
+    <>
+      <input
+        ref={attachInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          void handleAttachFileChange(e);
+        }}
+      />
+      {recognizeError ? (
+        <p className="mb-2 text-sm text-danger" role="alert">
+          {recognizeError}
+        </p>
+      ) : null}
+      <ChatComposer
+        ref={inputRef}
+        value={inputValue}
+        onChange={setInputValue}
+        onSend={handleSendMessage}
+        disabled={isTyping || Boolean(pendingApproval) || recognizing || resumeInFlight}
+        ariaLabel={t('ai.title')}
+        onAttach={handleAttachPantryImage}
+        attachDisabled={Boolean(pendingApproval)}
+        attaching={recognizing}
+        attachAriaLabel={t('pantryVision.attach')}
+      />
+      <PantryImageReviewModal
+        open={reviewOpen}
+        items={reviewItems}
+        imagePreviewUrl={reviewPreviewUrl}
+        emptyMessage={reviewEmptyMessage}
+        onClose={closeReviewModal}
+        onApplied={() => {
+          void fetchAllPantryItems();
+        }}
+      />
+    </>
   );
 
   return (
@@ -832,7 +940,7 @@ export function AICookingAssistant({
         title={headerTitle}
         onOpenMenu={onOpenMenu}
         onNewChat={() => {
-          if (!isTyping && !resumeInFlight) void handleNewSession();
+          if (!isTyping) void handleNewSession();
         }}
       />
 
@@ -921,6 +1029,8 @@ export function AICookingAssistant({
                         ? 'max-w-[min(85%,28rem)] min-w-[4.5rem] rounded-2xl px-4 py-2.5 sm:py-3 bg-herb text-white'
                         : message.type === 'error'
                           ? 'w-full max-w-3xl rounded-2xl px-4 py-3 bg-sage/50 text-herb-deep border border-line'
+                          : message.type === 'quota_upsell'
+                            ? 'w-full max-w-3xl rounded-2xl px-4 py-3 bg-sage/30 text-ink border border-herb'
                           : 'w-full max-w-3xl text-ink text-base sm:text-[1.0625rem] leading-relaxed'
                     }
                   >
@@ -951,6 +1061,15 @@ export function AICookingAssistant({
                           {message.streaming && message.statusText && (
                             <p className="mt-2 text-xs text-muted">{message.statusText}</p>
                           )}
+                          {message.type === 'quota_upsell' && onViewSubscription ? (
+                            <button
+                              type="button"
+                              onClick={onViewSubscription}
+                              className="mt-3 rounded-lg bg-herb px-4 py-2 text-sm font-medium text-white"
+                            >
+                              {t('ai.quotaUpsellFreeCta')}
+                            </button>
+                          ) : null}
                         </>
                       )}
                     </div>
@@ -1050,12 +1169,18 @@ export function AICookingAssistant({
                       <div className="mt-3 bg-surface border border-line rounded-xl p-4">
                         <p className="font-medium text-ink mb-2">Meal suggestions</p>
                         <ul className="space-y-2">
-                          {(message.cardData.suggestions ?? []).map((s, index) => (
+                          {(message.cardData.suggestions ?? []).map((s, index) => {
+                            const name = s.recipeName ?? s.meal_name;
+                            const pct = s.matchScore;
+                            return (
                             <li key={index} className="text-sm text-ink flex justify-between">
-                              <span>{s.recipeName}</span>
-                              <span className="text-muted">{s.matchScore}% match</span>
+                              <span>{name}</span>
+                              <span className="text-muted">
+                                {pct != null ? `${pct}% match` : '—'}
+                              </span>
                             </li>
-                          ))}
+                            );
+                          })}
                         </ul>
                         <button onClick={handleViewCalendar} className="w-full mt-3 bg-sage/40 text-ink py-2 rounded-lg text-sm">
                           View Calendar

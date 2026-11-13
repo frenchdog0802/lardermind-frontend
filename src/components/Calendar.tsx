@@ -1,8 +1,15 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeftIcon, ChevronRightIcon, CheckIcon, PackageIcon, ImageIcon, PlusIcon, TrashIcon, XIcon, AlertCircleIcon, SearchIcon, ChevronDownIcon, CalendarIcon, ListIcon, MoreHorizontalIcon, ChevronUpIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, CheckIcon, PackageIcon, ImageIcon, PlusIcon, TrashIcon, XIcon, AlertCircleIcon, SearchIcon, ChevronDownIcon, CalendarIcon, ListIcon, MoreHorizontalIcon, ChevronUpIcon, ShoppingCartIcon } from 'lucide-react';
 import { usePantry, normalizeRecipe } from '../contexts/pantryContext';
-import { MealPlan, Recipe } from '../api/types';
+import { mealPlanApi } from '../api/mealPlan';
+import {
+  MealAvailabilityEntry,
+  MealAvailabilityStatus,
+  MealConfirmShortage,
+  MealPlan,
+  Recipe,
+} from '../api/types';
 import { recipeApi } from '../api/recipes';
 import { Loading } from './Loading';
 import { AppHeader } from './AppHeader';
@@ -27,6 +34,8 @@ export function Calendar({
     recipes: contextRecipes,
     mealPlansLoading,
     recipesLoading,
+    fetchAllShoppingListItems,
+    addShoppingListItem,
   } = usePantry();
   const [recipes, setRecipes] = useState<Recipe[]>(contextRecipes);
   const [showRecipeDetailModal, setShowRecipeDetailModal] = useState(false);
@@ -42,8 +51,9 @@ export function Calendar({
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  // New state for view toggle
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Week list is the primary calendar hub view
+  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
   // List view week navigation state
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     // Initialize to the start of the current week (Sunday)
@@ -62,6 +72,10 @@ export function Calendar({
   // New state for notification
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationShortages, setNotificationShortages] = useState<MealConfirmShortage[] | null>(null);
+  const [availabilityByMealId, setAvailabilityByMealId] = useState<Record<string, MealAvailabilityEntry>>({});
+  const [weekShortages, setWeekShortages] = useState<MealConfirmShortage[]>([]);
+  const [addingShopping, setAddingShopping] = useState(false);
   // Get number of days in current month
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   // Get day of week of first day of month (0 = Sunday, 6 = Saturday)
@@ -82,6 +96,7 @@ export function Calendar({
       const [plans, fetchedRecipes] = await Promise.all([
         fetchAllMealPlans(),
         fetchAllRecipes(),
+        fetchAllShoppingListItems(),
       ]);
       setMealPlans(plans || []);
       setRecipes(fetchedRecipes || []);
@@ -105,6 +120,161 @@ export function Calendar({
   // Format date from Date object to YYYY-MM-DD
   const formatDateObj = (date: Date) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const getWeekBounds = useCallback(() => {
+    const from = formatDateObj(currentWeekStart);
+    const end = new Date(currentWeekStart);
+    end.setDate(currentWeekStart.getDate() + 6);
+    const to = formatDateObj(end);
+    return { from, to };
+  }, [currentWeekStart]);
+
+  const refreshAvailability = useCallback(async () => {
+    const week = getWeekBounds();
+    const monthFrom = formatDateString(currentYear, currentMonth, 1);
+    const monthTo = formatDateString(currentYear, currentMonth, daysInMonth);
+    const from = week.from < monthFrom ? week.from : monthFrom;
+    const to = week.to > monthTo ? week.to : monthTo;
+    try {
+      const res = await mealPlanApi.availability(from, to);
+      if (res.success && res.data) {
+        const map: Record<string, MealAvailabilityEntry> = {};
+        for (const entry of res.data.meals ?? []) {
+          map[entry.meal_plan_id] = entry;
+        }
+        setAvailabilityByMealId(map);
+        // Week CTA uses shortages only for the visible week meals
+        const weekMealIds = new Set(
+          mealPlans
+            .filter((m) => m.serving_date >= week.from && m.serving_date <= week.to)
+            .map((m) => m.id),
+        );
+        const weekMealShortages = (res.data.meals ?? [])
+          .filter((m) => weekMealIds.has(m.meal_plan_id) && m.status === 'short')
+          .map((m) => m.shortages);
+        const aggregated: MealConfirmShortage[] = [];
+        const keyOf = (s: MealConfirmShortage) =>
+          `${(s.ingredient_id || s.name).toLowerCase()}|${s.unit}`;
+        for (const list of weekMealShortages) {
+          for (const s of list) {
+            const deficit = Math.max(0, s.needed - s.available);
+            if (deficit <= 0) continue;
+            const key = keyOf(s);
+            const existing = aggregated.find((a) => keyOf(a) === key);
+            if (existing) existing.needed += deficit;
+            else {
+              aggregated.push({
+                ...(s.ingredient_id ? { ingredient_id: s.ingredient_id } : {}),
+                name: s.name,
+                needed: deficit,
+                available: 0,
+                unit: s.unit,
+              });
+            }
+          }
+        }
+        setWeekShortages(
+          weekMealIds.size > 0 ? aggregated : (res.data.weekShortages ?? []),
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load meal availability:', err);
+    }
+  }, [getWeekBounds, currentYear, currentMonth, daysInMonth, mealPlans]);
+
+  useEffect(() => {
+    void refreshAvailability();
+  }, [refreshAvailability, mealPlans]);
+
+  const clearNotificationTimer = () => {
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current);
+      notificationTimerRef.current = null;
+    }
+  };
+
+  const showToast = (message: string, opts?: { shortages?: MealConfirmShortage[]; durationMs?: number }) => {
+    clearNotificationTimer();
+    setNotificationMessage(message);
+    setNotificationShortages(opts?.shortages ?? null);
+    setShowNotification(true);
+    notificationTimerRef.current = setTimeout(() => {
+      setShowNotification(false);
+      setNotificationShortages(null);
+    }, opts?.durationMs ?? 5000);
+  };
+
+  const addShortagesToShopping = async (shortages: MealConfirmShortage[]) => {
+    if (!shortages.length || addingShopping) return;
+    setAddingShopping(true);
+    try {
+      // Server merges qty by CI name + unit onto unchecked rows (closed-loop QA #2).
+      let added = 0;
+      for (const s of shortages) {
+        const qty = Math.max(0, s.needed - (s.available ?? 0)) || s.needed;
+        if (qty <= 0) continue;
+        await addShoppingListItem({
+          name: s.name,
+          quantity: qty,
+          unit: s.unit,
+          checked: false,
+          ...(s.ingredient_id ? { ingredient_id: s.ingredient_id } : {}),
+        });
+        added += 1;
+      }
+      if (added > 0) {
+        showToast(t('calendar.addedToShopping', { count: added }), { durationMs: 3500 });
+        await fetchAllShoppingListItems();
+        await refreshAvailability();
+      } else {
+        showToast(t('calendar.nothingToAdd'), { durationMs: 3500 });
+      }
+    } catch (err) {
+      console.error('Failed to add shortages to shopping:', err);
+    } finally {
+      setAddingShopping(false);
+    }
+  };
+
+  const mealThumbUrl = (item: MealPlan): string | null => {
+    if (item.image && typeof item.image === 'string' && item.image.trim()) {
+      return item.image.trim();
+    }
+    const recipe = recipes.find((r) => String(r.id) === String(item.recipe_id ?? ''));
+    return recipe?.image?.url ?? null;
+  };
+
+  const stockLightClass = (status: MealAvailabilityStatus | undefined) => {
+    switch (status) {
+      case 'ok':
+        return 'bg-herb';
+      case 'short':
+        return 'bg-red-500';
+      case 'unknown':
+      default:
+        return 'bg-muted';
+    }
+  };
+
+  const stockLightTitle = (status: MealAvailabilityStatus | undefined) => {
+    switch (status) {
+      case 'ok':
+        return t('calendar.stockOk');
+      case 'short':
+        return t('calendar.stockShort');
+      default:
+        return t('calendar.stockUnknown');
+    }
+  };
+
+  const formatShortageSummary = (shortages: MealConfirmShortage[]) => {
+    const summary = shortages
+      .slice(0, 3)
+      .map((s) => `${s.name} (${s.needed}${s.unit})`)
+      .join('; ');
+    const extra = shortages.length > 3 ? ` +${shortages.length - 3}` : '';
+    return { summary, extra };
   };
   // Get cooking history for selected date
   const getHistoryForSelectedDate = () => {
@@ -199,19 +369,17 @@ export function Calendar({
 
       // Also remove from local state
       setMealPlans(prev => prev.filter(mp => mp.id !== recipeToDelete.id));
+      void refreshAvailability();
     }
   };
 
-  const showShortageTip = (shortages: Array<{ name: string; needed: number; available: number; unit: string }>) => {
+  const showShortageTip = (shortages: MealConfirmShortage[]) => {
     if (!shortages.length) return;
-    const summary = shortages
-      .slice(0, 3)
-      .map(s => `${s.name} (had ${s.available}${s.unit}, needed ${s.needed}${s.unit})`)
-      .join('; ');
-    const extra = shortages.length > 3 ? ` +${shortages.length - 3} more` : '';
-    setNotificationMessage(t('calendar.shortage', { summary, extra }));
-    setShowNotification(true);
-    setTimeout(() => setShowNotification(false), 6000);
+    const { summary, extra } = formatShortageSummary(shortages);
+    showToast(t('calendar.shortage', { summary, extra }), {
+      shortages,
+      durationMs: 8000,
+    });
   };
 
   const handleConfirmMeal = async (item: MealPlan, e?: { stopPropagation: () => void }) => {
@@ -226,10 +394,9 @@ export function Calendar({
       if (shortages.length > 0) {
         showShortageTip(shortages);
       } else {
-        setNotificationMessage(t('calendar.confirmed', { name: item.meal_name }));
-        setShowNotification(true);
-        setTimeout(() => setShowNotification(false), 3500);
+        showToast(t('calendar.confirmed', { name: item.meal_name }), { durationMs: 3500 });
       }
+      void refreshAvailability();
     }
   };
 
@@ -238,9 +405,8 @@ export function Calendar({
     const response = await skipMealPlan(item.id);
     if (response.success) {
       setMealPlans(prev => prev.map(mp => (mp.id === item.id ? { ...mp, status: 'SKIPPED' } : mp)));
-      setNotificationMessage(t('calendar.skipped', { name: item.meal_name }));
-      setShowNotification(true);
-      setTimeout(() => setShowNotification(false), 3000);
+      showToast(t('calendar.skipped', { name: item.meal_name }), { durationMs: 3000 });
+      void refreshAvailability();
     }
   };
 
@@ -309,16 +475,10 @@ export function Calendar({
         const exists = withoutTemp.some(m => m.id === saved.id);
         return exists ? withoutTemp : [...withoutTemp, saved];
       });
-      setNotificationMessage(t('calendar.recipeAdded'));
-      setShowNotification(true);
+      showToast(t('calendar.recipeAdded'), { durationMs: 3000 });
       resetAddModal();
+      void refreshAvailability();
     }
-
-    // Auto close NotificationMessage after 3 seconds
-    setTimeout(() => {
-      setShowNotification(false);
-    }, 3000);
-
   };
 
   const resetAddModal = () => {
@@ -621,6 +781,25 @@ export function Calendar({
                 <ChevronRightIcon size={16} className="ml-0.5" />
               </button>
             </div>
+            {weekShortages.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2.5">
+                <p className="text-xs text-muted min-w-0 flex-1">
+                  {(() => {
+                    const { summary, extra } = formatShortageSummary(weekShortages);
+                    return t('calendar.missingSummary', { summary, extra });
+                  })()}
+                </p>
+                <button
+                  type="button"
+                  disabled={addingShopping}
+                  onClick={() => void addShortagesToShopping(weekShortages)}
+                  className="flex items-center gap-1.5 text-sm font-medium text-white bg-herb hover:bg-herb active:bg-herb-deep px-3 py-1.5 rounded-xl disabled:opacity-60"
+                >
+                  <ShoppingCartIcon size={14} />
+                  {t('calendar.addAllMissing')}
+                </button>
+              </div>
+            )}
             {/* Week View */}
             <div className="space-y-2">
               {Object.entries(getWeekViewData()).sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime()).map(([date, items]) => {
@@ -640,57 +819,110 @@ export function Calendar({
                     {hasItems && (isExpanded ? <ChevronUpIcon size={18} className="text-muted" /> : <ChevronDownIcon size={18} className="text-muted" />)}
                   </div>
                   {isExpanded && hasItems && <div className="divide-y divide-line">
-                    {items.map((item: MealPlan) => <div key={`${item.recipe_id}-${item.serving_date}-${item.meal_type}`} className="p-3 hover:bg-linen">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center flex-1 min-w-0">
-                          <div className={`w-1.5 h-1.5 rounded-full mr-2 flex-shrink-0 ${getMealTypeIndicatorColor(item.meal_type)}`}></div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm text-ink truncate">
-                              {item.meal_name}
-                            </p>
-                            <p className="text-xs text-muted">
-                              {getMealTypeLabel(item.meal_type)}
-                            </p>
+                    {items.map((item: MealPlan) => {
+                      const avail = availabilityByMealId[item.id];
+                      const thumb = mealThumbUrl(item);
+                      const actionKey = `${item.id}-${item.serving_date}-${item.meal_type}`;
+                      return (
+                        <div key={actionKey} className="p-3 hover:bg-linen">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex items-start flex-1 min-w-0 cursor-pointer" onClick={() => handleMealClick(item)}>
+                              <div className="relative mr-2 flex-shrink-0">
+                                {thumb ? (
+                                  <img src={thumb} alt="" className="w-12 h-12 rounded-lg object-cover border border-line" />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-lg bg-sage/40 border border-line flex items-center justify-center">
+                                    <ImageIcon size={18} className="text-muted" />
+                                  </div>
+                                )}
+                                <span
+                                  className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-surface ${stockLightClass(avail?.status)}`}
+                                  title={stockLightTitle(avail?.status)}
+                                  aria-label={stockLightTitle(avail?.status)}
+                                />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getMealTypeIndicatorColor(item.meal_type)}`} />
+                                  <p className="font-medium text-sm text-ink truncate">
+                                    {item.meal_name}
+                                  </p>
+                                </div>
+                                <p className="text-xs text-muted mt-0.5">
+                                  {getMealTypeLabel(item.meal_type)}
+                                  {item.status && item.status !== 'PLANNED' && (
+                                    <>
+                                      {' · '}
+                                      {item.status === 'PENDING_CONFIRM' && t('calendar.statusPending')}
+                                      {item.status === 'CONFIRMED' && t('calendar.statusCooked')}
+                                      {item.status === 'SKIPPED' && t('calendar.statusDidntCook')}
+                                    </>
+                                  )}
+                                </p>
+                                {avail?.status === 'short' && avail.shortages.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-xs text-red-600">
+                                      {(() => {
+                                        const { summary, extra } = formatShortageSummary(avail.shortages);
+                                        return t('calendar.missingSummary', { summary, extra });
+                                      })()}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      disabled={addingShopping}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void addShortagesToShopping(avail.shortages);
+                                      }}
+                                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-herb hover:text-herb-deep"
+                                    >
+                                      <ShoppingCartIcon size={12} />
+                                      {t('calendar.addMissingToShopping')}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="relative ml-1 flex-shrink-0">
+                              <button onClick={e => {
+                                e.stopPropagation();
+                                toggleItemActions(actionKey);
+                              }} className="p-2 rounded-full hover:bg-sage/50 active:bg-sage/60">
+                                <MoreHorizontalIcon size={18} className="text-muted" />
+                              </button>
+                              {showItemActions === actionKey && <div className="absolute right-0 mt-1 w-40 bg-surface rounded-lg shadow-lg border border-line z-10">
+                                {canActOnMeal(item) && <>
+                                  <button onClick={e => {
+                                    e.stopPropagation();
+                                    handleConfirmMeal(item, e);
+                                    setShowItemActions(null);
+                                  }} className="w-full text-left px-3 py-2.5 text-sm text-ink hover:bg-sage/50 active:bg-sage flex items-center rounded-t-xl">
+                                    <CheckIcon size={14} className="mr-2" />
+                                    {t('calendar.markCooked')}
+                                  </button>
+                                  <button onClick={e => {
+                                    e.stopPropagation();
+                                    handleSkipMeal(item, e);
+                                    setShowItemActions(null);
+                                  }} className="w-full text-left px-3 py-2.5 text-sm text-muted hover:bg-sage/50 active:bg-sage flex items-center">
+                                    <XIcon size={14} className="mr-2" />
+                                    {t('calendar.didntCook')}
+                                  </button>
+                                </>}
+                                <button onClick={e => {
+                                  e.stopPropagation();
+                                  handleDeleteRecipe(item);
+                                  setShowItemActions(null);
+                                }} className="w-full text-left px-3 py-2.5 text-sm text-herb hover:bg-sage/50 active:bg-sage flex items-center rounded-b-xl">
+                                  <TrashIcon size={14} className="mr-2" />
+                                  Remove
+                                </button>
+                              </div>}
+                            </div>
                           </div>
                         </div>
-                        <div className="relative ml-2">
-                          <button onClick={e => {
-                            e.stopPropagation();
-                            toggleItemActions(`${item.recipe_id}-${item.serving_date}-${item.meal_type}`);
-                          }} className="p-2 rounded-full hover:bg-sage/50 active:bg-sage/60">
-                            <MoreHorizontalIcon size={18} className="text-muted" />
-                          </button>
-                          {showItemActions === `${item.recipe_id}-${item.serving_date}-${item.meal_type}` && <div className="absolute right-0 mt-1 w-40 bg-surface rounded-lg shadow-lg border border-line z-10">
-                            {canActOnMeal(item) && <>
-                              <button onClick={e => {
-                                e.stopPropagation();
-                                handleConfirmMeal(item, e);
-                                setShowItemActions(null);
-                              }} className="w-full text-left px-3 py-2.5 text-sm text-ink hover:bg-sage/50 active:bg-sage flex items-center rounded-t-xl">
-                                <CheckIcon size={14} className="mr-2" />
-                                {t('calendar.markCooked')}
-                              </button>
-                              <button onClick={e => {
-                                e.stopPropagation();
-                                handleSkipMeal(item, e);
-                                setShowItemActions(null);
-                              }} className="w-full text-left px-3 py-2.5 text-sm text-muted hover:bg-sage/50 active:bg-sage flex items-center">
-                                <XIcon size={14} className="mr-2" />
-                                {t('calendar.didntCook')}
-                              </button>
-                            </>}
-                            <button onClick={e => {
-                              e.stopPropagation();
-                              handleDeleteRecipe(item);
-                              setShowItemActions(null);
-                            }} className="w-full text-left px-3 py-2.5 text-sm text-herb hover:bg-sage/50 active:bg-sage flex items-center rounded-b-xl">
-                              <TrashIcon size={14} className="mr-2" />
-                              Remove
-                            </button>
-                          </div>}
-                        </div>
-                      </div>
-                    </div>)}
+                      );
+                    })}
                   </div>}
                   <div className="p-2 bg-linen flex justify-center border-t border-line">
                     <button onClick={e => {
@@ -731,53 +963,82 @@ export function Calendar({
                   {getMealTypeLabel(type)}:
                 </h4>
                 <div className="space-y-2">
-                  {meals.map((item: MealPlan, index: number) => <div key={index} className={`p-4 rounded-xl border ${getMealTypeColor(type)} cursor-pointer hover:shadow-md transition-shadow`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center min-w-0 flex-1" onClick={() => handleMealClick(item)}>
-                        <div className={`w-1.5 h-1.5 rounded-full mr-2 flex-shrink-0 ${getMealTypeIndicatorColor(type)}`}></div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm text-ink truncate">
-                            {item.meal_name}
-                          </p>
-                          {item.status && item.status !== 'PLANNED' && (
-                            <p className="text-xs text-muted">
-                              {item.status === 'PENDING_CONFIRM' && t('calendar.statusPending')}
-                              {item.status === 'CONFIRMED' && t('calendar.statusCooked')}
-                              {item.status === 'SKIPPED' && t('calendar.statusDidntCook')}
-                            </p>
-                          )}
+                  {meals.map((item: MealPlan) => {
+                    const avail = availabilityByMealId[item.id];
+                    const thumb = mealThumbUrl(item);
+                    return (
+                      <div key={item.id} className={`p-4 rounded-xl border ${getMealTypeColor(type)} hover:shadow-md transition-shadow`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center min-w-0 flex-1 cursor-pointer" onClick={() => handleMealClick(item)}>
+                            <div className="relative mr-2 flex-shrink-0">
+                              {thumb ? (
+                                <img src={thumb} alt="" className="w-10 h-10 rounded-lg object-cover border border-line" />
+                              ) : (
+                                <div className={`w-1.5 h-1.5 rounded-full ${getMealTypeIndicatorColor(type)}`} />
+                              )}
+                              <span
+                                className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-surface ${stockLightClass(avail?.status)}`}
+                                title={stockLightTitle(avail?.status)}
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm text-ink truncate">
+                                {item.meal_name}
+                              </p>
+                              {item.status && item.status !== 'PLANNED' && (
+                                <p className="text-xs text-muted">
+                                  {item.status === 'PENDING_CONFIRM' && t('calendar.statusPending')}
+                                  {item.status === 'CONFIRMED' && t('calendar.statusCooked')}
+                                  {item.status === 'SKIPPED' && t('calendar.statusDidntCook')}
+                                </p>
+                              )}
+                              {avail?.status === 'short' && avail.shortages.length > 0 && (
+                                <button
+                                  type="button"
+                                  disabled={addingShopping}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void addShortagesToShopping(avail.shortages);
+                                  }}
+                                  className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-herb"
+                                >
+                                  <ShoppingCartIcon size={12} />
+                                  {t('calendar.addMissingToShopping')}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {canActOnMeal(item) && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={e => handleConfirmMeal(item, e)}
+                                  className="p-1.5 rounded-full hover:bg-sage active:bg-sage text-herb transition-colors"
+                                  aria-label={t('calendar.markCooked')}
+                                  title={t('calendar.markCooked')}
+                                >
+                                  <CheckIcon size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={e => handleSkipMeal(item, e)}
+                                  className="p-1.5 rounded-full hover:bg-sage active:bg-sage text-muted transition-colors"
+                                  aria-label={t('calendar.didntCook')}
+                                  title={t('calendar.didntCook')}
+                                >
+                                  <XIcon size={16} />
+                                </button>
+                              </>
+                            )}
+                            <button onClick={() => handleDeleteRecipe(item)} className="p-1.5 rounded-full hover:bg-sage active:bg-sage text-herb transition-colors" aria-label="Delete recipe">
+                              <TrashIcon size={16} />
+                            </button>
+                          </div>
                         </div>
-                        {item.image && <ImageIcon size={18} className="ml-2 text-muted flex-shrink-0" />}
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {canActOnMeal(item) && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={e => handleConfirmMeal(item, e)}
-                              className="p-1.5 rounded-full hover:bg-sage active:bg-sage text-herb transition-colors"
-                              aria-label={t('calendar.markCooked')}
-                              title={t('calendar.markCooked')}
-                            >
-                              <CheckIcon size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={e => handleSkipMeal(item, e)}
-                              className="p-1.5 rounded-full hover:bg-sage active:bg-sage text-muted transition-colors"
-                              aria-label={t('calendar.didntCook')}
-                              title={t('calendar.didntCook')}
-                            >
-                              <XIcon size={16} />
-                            </button>
-                          </>
-                        )}
-                        <button onClick={() => handleDeleteRecipe(item)} className="p-1.5 rounded-full hover:bg-sage active:bg-sage text-herb transition-colors" aria-label="Delete recipe">
-                          <TrashIcon size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>)}
+                    );
+                  })}
                 </div>
               </div>;
             })}
@@ -791,38 +1052,45 @@ export function Calendar({
           </div>}
         </div>}
       </main>
+      {/* Notification Toast — always mounted (not only inside add modal) */}
+      {showNotification && (
+        <div className="fixed top-4 right-4 z-[60] max-w-sm">
+          <div className="flex items-start gap-3 bg-surface border border-line rounded-xl shadow-lg p-4">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-herb flex items-center justify-center">
+              <CheckIcon size={16} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-ink">
+                {notificationMessage}
+              </p>
+              {notificationShortages && notificationShortages.length > 0 && (
+                <button
+                  type="button"
+                  disabled={addingShopping}
+                  onClick={() => void addShortagesToShopping(notificationShortages)}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-herb hover:text-herb-deep disabled:opacity-60"
+                >
+                  <ShoppingCartIcon size={12} />
+                  {t('calendar.addMissingToShopping')}
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                clearNotificationTimer();
+                setShowNotification(false);
+                setNotificationMessage('');
+                setNotificationShortages(null);
+              }}
+              className="text-muted hover:text-ink transition"
+            >
+              <XIcon size={16} />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Add Recipe Modal */}
       {showAddRecipeModal && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        {/* Notification Toast */}
-        {showNotification && (
-          <div className="fixed top-4 right-4 z-50 max-w-sm">
-            <div className="flex items-start gap-3 bg-surface border border-line rounded-xl shadow-lg p-4">
-
-              {/* Icon */}
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sage/500 flex items-center justify-center">
-                <CheckIcon size={16} className="text-white" />
-              </div>
-
-              {/* Message */}
-              <div className="flex-1">
-                <p className="text-sm font-medium text-ink">
-                  {notificationMessage}
-                </p>
-              </div>
-
-              {/* Close */}
-              <button
-                onClick={() => {
-                  setShowNotification(false);
-                  setNotificationMessage('');
-                }}
-                className="text-muted hover:text-muted transition"
-              >
-                <XIcon size={16} />
-              </button>
-            </div>
-          </div>
-        )}
         <div className="bg-surface rounded-xl shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
           <div className="p-4 border-b border-line flex justify-between items-center sticky top-0 bg-surface z-10 rounded-t-2xl">
             <h3 className="font-semibold text-ink text-base">

@@ -28,7 +28,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Is there a free plan?',
-    a: 'Yes. Free includes pantry, shopping, calendar, and a daily AI chat allowance. Pro raises AI messages, recipe imports, and upload limits — from $4.99/mo.',
+    a: 'Yes. Free includes pantry, shopping, calendar, and a daily AI chat allowance. Upgrade anytime for a 7-day Pro trial — then higher AI and upload limits from $4.99/mo.',
   },
   {
     q: 'Where does it run?',
@@ -170,14 +170,14 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
               Just ask — LarderMind handles the rest
             </h2>
             <p className="mt-4 text-lg text-muted">
-              Talk to your kitchen in plain English. Plan meals, update your pantry, build grocery
-              lists, and import recipes — the same chat you use every day in the app.
+              Talk to your kitchen in plain English. Plan meals, update your pantry, and build grocery
+              lists — the same chat you use every day in the app. Guest demo: 5 AI messages / day.
             </p>
             <ul className="mt-8 space-y-4">
               {[
                 "Ask what you can cook with what's already in your fridge",
                 'Plan a week of dinners that respect allergies and picky eaters',
-                'Add ingredients or import a recipe URL in one message',
+                'Add ingredients from a pasted fridge list in one message',
               ].map((item) => (
                 <li key={item} className="flex gap-3 text-ink">
                   <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-herb" />
@@ -203,6 +203,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
                   onGetStarted={onGetStarted}
                   showHeader={false}
                   size="large"
+                  fixedLanguage="en"
                 />
               </div>
             </div>

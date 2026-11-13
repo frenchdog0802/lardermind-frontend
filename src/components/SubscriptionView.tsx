@@ -4,6 +4,7 @@ import { SubscriptionPanel } from './SubscriptionPanel';
 
 interface SubscriptionViewProps {
   onOpenMenu?: () => void;
+  active?: boolean;
   checkoutSuccess?: boolean;
   checkoutCancelled?: boolean;
   portalReturn?: boolean;
@@ -11,6 +12,7 @@ interface SubscriptionViewProps {
 
 export function SubscriptionView({
   onOpenMenu,
+  active = true,
   checkoutSuccess = false,
   checkoutCancelled = false,
   portalReturn = false,
@@ -22,6 +24,7 @@ export function SubscriptionView({
       <AppHeader title={t('nav.subscription')} onOpenMenu={onOpenMenu} />
       <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 py-6">
         <SubscriptionPanel
+          active={active}
           checkoutSuccess={checkoutSuccess}
           checkoutCancelled={checkoutCancelled}
           portalReturn={portalReturn}

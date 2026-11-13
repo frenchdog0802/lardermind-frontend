@@ -6,7 +6,7 @@ import {
   type KeyboardEvent,
   type TextareaHTMLAttributes,
 } from 'react';
-import { SendIcon } from 'lucide-react';
+import { PaperclipIcon, SendIcon } from 'lucide-react';
 
 export type ChatComposerProps = {
   value: string;
@@ -15,6 +15,11 @@ export type ChatComposerProps = {
   disabled?: boolean;
   ariaLabel: string;
   maxHeightPx?: number;
+  /** When set, shows an attach control (e.g. pantry vision photo). */
+  onAttach?: () => void;
+  attachDisabled?: boolean;
+  attaching?: boolean;
+  attachAriaLabel?: string;
 };
 
 const DEFAULT_MAX_HEIGHT_PX = 240;
@@ -32,12 +37,17 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(
       disabled = false,
       ariaLabel,
       maxHeightPx = DEFAULT_MAX_HEIGHT_PX,
+      onAttach,
+      attachDisabled = false,
+      attaching = false,
+      attachAriaLabel = 'Attach image',
     },
     ref,
   ) {
     const [focused, setFocused] = useState(false);
     const innerRef = useRef<HTMLTextAreaElement | null>(null);
     const canSend = Boolean(value.trim()) && !disabled;
+    const canAttach = Boolean(onAttach) && !disabled && !attachDisabled && !attaching;
 
     const setTextareaRef = (el: HTMLTextAreaElement | null) => {
       innerRef.current = el;
@@ -71,6 +81,22 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(
           focused ? 'border-herb' : 'border-line'
         }`}
       >
+        {onAttach ? (
+          <button
+            type="button"
+            onClick={onAttach}
+            disabled={!canAttach}
+            aria-label={attachAriaLabel}
+            aria-busy={attaching}
+            className={`absolute left-1.5 bottom-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+              canAttach
+                ? 'text-muted hover:bg-sage/60 hover:text-ink'
+                : 'text-muted/50'
+            }`}
+          >
+            <PaperclipIcon size={16} />
+          </button>
+        ) : null}
         <textarea
           ref={setTextareaRef}
           rows={1}
@@ -79,7 +105,9 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(
           onKeyDown={handleKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          className="w-full resize-none overflow-y-auto border-0 bg-transparent py-3 pl-4 pr-14 text-base leading-6 text-ink focus:outline-none focus-visible:outline-none disabled:opacity-60 min-h-[52px] max-h-40"
+          className={`w-full resize-none overflow-y-auto border-0 bg-transparent py-3 pr-14 text-base leading-6 text-ink focus:outline-none focus-visible:outline-none disabled:opacity-60 min-h-[52px] max-h-40 ${
+            onAttach ? 'pl-12' : 'pl-4'
+          }`}
           style={textareaReset}
           disabled={disabled}
           aria-label={ariaLabel}
