@@ -43,6 +43,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         removePantryItem,
         ingredients,
         fetchAllPantryItems,
+        fetchAllIngredients,
         userSettings,
     } = usePantry();
 
@@ -106,6 +107,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
 
     useEffect(() => {
         fetchAllPantryItems();
+        void fetchAllIngredients(null);
     }, []);
 
     // Sync oriPantryItems to local pantryItems
@@ -146,7 +148,11 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         // Check if item already exists
         const existingItem = pantryItems.find(item => item.name.toLowerCase() === newItem.name.toLowerCase());
         if (existingItem) {
-            updatePantryItem({ ...existingItem, quantity: newItem.quantity });
+            updatePantryItem({
+                ...existingItem,
+                quantity: newItem.quantity,
+                unit: newItem.unit || existingItem.unit,
+            });
         } else {
             // Add new item
             addPantryItem({ ...newItem });

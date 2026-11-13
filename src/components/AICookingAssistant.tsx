@@ -78,7 +78,15 @@ interface ResponseCardData {
   mealType?: string;
   servingDate?: string;
   mealsScheduled?: number;
-  meals?: Array<{ meal_name?: string; serving_date?: string; meal_type?: string }>;
+  meals?: Array<{
+    recipeName?: string;
+    mealType?: string;
+    servingDate?: string;
+    /** Legacy snake_case — prefer camelCase fields above */
+    meal_name?: string;
+    serving_date?: string;
+    meal_type?: string;
+  }>;
   mergedGroups?: number;
   removedDuplicates?: number;
   suggestions?: Array<{
@@ -1118,11 +1126,16 @@ export function AICookingAssistant({
                         </p>
                         {(message.cardData.meals ?? []).length > 0 && (
                           <ul className="mt-2 text-sm text-muted space-y-1">
-                            {message.cardData.meals!.map((meal, index) => (
-                              <li key={index}>
-                                {meal.meal_name} · {meal.meal_type} · {meal.serving_date}
-                              </li>
-                            ))}
+                            {message.cardData.meals!.map((meal, index) => {
+                              const name = meal.recipeName ?? meal.meal_name ?? '';
+                              const type = meal.mealType ?? meal.meal_type ?? '';
+                              const date = meal.servingDate ?? meal.serving_date ?? '';
+                              return (
+                                <li key={index}>
+                                  {name} · {type} · {date}
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
                         <button onClick={handleViewCalendar} className="w-full mt-3 bg-herb text-white py-2 rounded-lg text-sm">
