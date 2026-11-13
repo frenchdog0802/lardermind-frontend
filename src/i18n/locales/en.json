@@ -100,6 +100,7 @@
     "googleCancelled": "Google login was cancelled or failed.",
     "signUpFailed": "Sign up failed",
     "passwordPlaceholder": "Password",
+    "passwordRules": "At least 8 characters.",
     "confirmPassword": "Confirm Password",
     "passwordsMismatch": "Passwords do not match",
     "googleSignUpFailed": "Google sign up failed",

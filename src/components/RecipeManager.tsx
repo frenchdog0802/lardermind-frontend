@@ -976,7 +976,7 @@ export function RecipeManager({
                 </div>
                 {newRecipeError && <p className="text-herb text-sm mb-2">{newRecipeError}</p>}
                 <button onClick={handleSaveRecipe} disabled={!newRecipe.meal_name.trim() || newRecipe.ingredients.length === 0} className={`w-full py-3 px-4 rounded-xl font-medium ${newRecipe.meal_name.trim() && newRecipe.ingredients.length > 0 ? 'bg-herb hover:bg-herb-deep text-white' : 'bg-sage/40 text-muted cursor-not-allowed'} transition-colors`}>
-                  Log This Meal
+                  Save recipe
                 </button>
               </div>
             </div>

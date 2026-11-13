@@ -100,6 +100,7 @@
     "googleCancelled": "已取消或 Google 登入失敗。",
     "signUpFailed": "註冊失敗",
     "passwordPlaceholder": "密碼",
+    "passwordRules": "至少 8 個字元。",
     "confirmPassword": "確認密碼",
     "passwordsMismatch": "兩次輸入的密碼不一致",
     "googleSignUpFailed": "Google 註冊失敗",

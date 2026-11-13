@@ -57,6 +57,17 @@ function unwrap<T>(response: { success: boolean; message?: string; data?: T }): 
   return response.data;
 }
 
+function readStoredJwt(): string {
+  const stored = localStorage.getItem('jwt');
+  if (!stored) return '';
+  try {
+    const parsed = JSON.parse(stored);
+    return typeof parsed === 'string' ? parsed : stored;
+  } catch {
+    return stored;
+  }
+}
+
 export const subscriptionApi = {
   getPlans: async (): Promise<PlansResponse> => {
     const response = await api.get<PlansResponse>('/api/subscription/plans');
@@ -64,6 +75,9 @@ export const subscriptionApi = {
   },
 
   getStatus: async (): Promise<SubscriptionStatus> => {
+    if (!readStoredJwt()) {
+      throw new Error('Sign in to view subscription status');
+    }
     const response = await api.get<SubscriptionStatus>('/api/subscription/status');
     return unwrap(response);
   },

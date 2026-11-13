@@ -617,16 +617,19 @@ export function Calendar({
       setShowItemActions(itemId);
     }
   };
-  // Initialize expanded groups
+  // Expand every day in the current week that has meals (list view default).
   useEffect(() => {
-    // Initially expand today's group if it exists in current week
     const today = new Date().toISOString().split('T')[0];
     setSelectedDate(new Date());
     const weekData = getWeekViewData();
-    if (weekData[today]) {
+    const withMeals = Object.entries(weekData)
+      .filter(([, items]) => Array.isArray(items) && items.length > 0)
+      .map(([date]) => date);
+    if (withMeals.length > 0) {
+      setExpandedDateGroups(withMeals);
+    } else if (weekData[today]) {
       setExpandedDateGroups([today]);
     } else if (Object.keys(weekData).length > 0) {
-      // If today doesn't exist in current week, expand the first group
       setExpandedDateGroups([Object.keys(weekData)[0]]);
     }
   }, [currentWeekStart]);
@@ -744,8 +747,22 @@ export function Calendar({
                       <span className={`text-center text-sm lg:text-base ${isToday ? 'font-bold text-herb' : 'text-ink'} leading-none`}>
                         {day}
                       </span>
-                      <div className="flex flex-col gap-0.5 mt-0.5">
-                        {mealTypeOrder.map(type => hasMealTypes[type] ? <div key={type} className={`h-1 rounded-full ${getMealTypeIndicatorColor(type)}`} title={getMealTypeLabel(type)} /> : null)}
+                      <div className="flex flex-col gap-0.5 mt-0.5 min-w-0">
+                        {dayMeals.slice(0, 2).map((meal: MealPlan) => (
+                          <p
+                            key={meal.id}
+                            className="hidden lg:block text-[10px] leading-tight text-ink truncate"
+                            title={meal.meal_name}
+                          >
+                            {meal.meal_name}
+                          </p>
+                        ))}
+                        {dayMeals.length > 2 ? (
+                          <p className="hidden lg:block text-[10px] text-muted">+{dayMeals.length - 2}</p>
+                        ) : null}
+                        <div className="flex flex-col gap-0.5 lg:hidden">
+                          {mealTypeOrder.map(type => hasMealTypes[type] ? <div key={type} className={`h-1 rounded-full ${getMealTypeIndicatorColor(type)}`} title={getMealTypeLabel(type)} /> : null)}
+                        </div>
                       </div>
                     </>}
                   </div>;

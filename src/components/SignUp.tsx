@@ -132,8 +132,10 @@ export function SignUp({ onSignUpSuccess, onLogin }: SignUpProps) {
                       onChange={e => setPassword(e.target.value)}
                       className="input-field"
                       placeholder={t('auth.passwordPlaceholder')}
+                      minLength={8}
                       required
                     />
+                    <p className="mt-1.5 text-xs text-muted">{t('auth.passwordRules')}</p>
                   </div>
                   <div>
                     <label htmlFor="confirmPassword" className="block text-sm font-medium text-ink mb-1">
