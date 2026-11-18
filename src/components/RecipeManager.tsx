@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { splitInstructionSteps } from '../utils/recipeSteps';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, SearchIcon, EditIcon, XIcon, ImageIcon, FolderIcon, ChevronRightIcon, HomeIcon, MoreVerticalIcon, FolderPlusIcon, PencilIcon, AlertCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
@@ -113,7 +114,8 @@ export function RecipeManager({
     (recipe.instructions || []).join('\n');
 
   const setInstructionsFromText = (text: string, target: 'selected' | 'new') => {
-    const instructions = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    // Keep blank lines while typing so Enter starts a new line; they are dropped on save.
+    const instructions = text.split(/\r?\n/);
     if (target === 'selected' && selectedRecipe) {
       setSelectedRecipe({ ...selectedRecipe, instructions });
     } else {
@@ -371,8 +373,9 @@ export function RecipeManager({
         setNewRecipeError('Ingredient names cannot be empty.');
         return;
       }
-      updateRecipe(selectedRecipe);
-      setRecipes(prev => prev.map(r => r.id === selectedRecipe.id ? selectedRecipe : r));
+      const cleanedRecipe = { ...selectedRecipe, instructions: splitInstructionSteps(selectedRecipe.instructions) };
+      updateRecipe(cleanedRecipe);
+      setRecipes(prev => prev.map(r => r.id === cleanedRecipe.id ? cleanedRecipe : r));
       setSelectedRecipe(null);
       setIsEditing(false);
     } else {
@@ -383,6 +386,7 @@ export function RecipeManager({
       // Skip pantry availability validation per request
       const recipeToAdd = {
         ...newRecipe,
+        instructions: splitInstructionSteps(newRecipe.instructions),
         folder_id: newRecipe.folder_id || (currentFolder ? currentFolder.id : uncategorizedFolderId)
       };
       addRecipe(recipeToAdd);
@@ -645,7 +649,7 @@ export function RecipeManager({
                       type="text"
                       value={selectedRecipe.meal_name}
                       onChange={e => setSelectedRecipe({ ...selectedRecipe, meal_name: e.target.value })}
-                      placeholder="Enter what you cooked"
+                      placeholder={t('recipes.mealNamePlaceholder')}
                       className="w-full p-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-herb/30 focus:border-transparent"
                     />
                   </div>
@@ -791,7 +795,7 @@ export function RecipeManager({
                     <ul className="space-y-2">
                       {selectedRecipe.ingredients.map((item, index) => <li key={index} className="flex justify-between">
                         <div>
-                          <span className="text-ink">{item.name}</span>
+                          <span className="text-ink capitalize">{item.name}</span>
                           {Number(item.quantity) > 0 && (
                           <QuantityLabel
                             className="text-muted text-sm ml-2"
@@ -807,13 +811,13 @@ export function RecipeManager({
                       </li>)}
                     </ul>
                   </div>
-                  {(selectedRecipe.instructions?.length ?? 0) > 0 && (
+                  {splitInstructionSteps(selectedRecipe.instructions).length > 0 && (
                     <div className="border-b border-line pb-4">
                       <h4 className="font-medium text-ink mb-2">
                         Instructions
                       </h4>
                       <ol className="space-y-3">
-                        {selectedRecipe.instructions.map((step, index) => (
+                        {splitInstructionSteps(selectedRecipe.instructions).map((step, index) => (
                           <li key={index} className="flex">
                             <div className="bg-sage rounded-full w-6 h-6 flex items-center justify-center text-herb-deep font-medium mr-3 flex-shrink-0 mt-0.5 text-sm">
                               {index + 1}
@@ -851,7 +855,7 @@ export function RecipeManager({
                   <label htmlFor="meal-name" className="block text-ink mb-2">
                     Meal Name
                   </label>
-                  <input type="text" id="meal-name" value={newRecipe.meal_name} onChange={e => setNewRecipe({ ...newRecipe, meal_name: e.target.value })} placeholder="Enter what you cooked" className="w-full p-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-herb/30 focus:border-transparent" />
+                  <input type="text" id="meal-name" value={newRecipe.meal_name} onChange={e => setNewRecipe({ ...newRecipe, meal_name: e.target.value })} placeholder={t('recipes.mealNamePlaceholder')} className="w-full p-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-herb/30 focus:border-transparent" />
                 </div>
                 <div>
                   <label htmlFor="folder-new" className="block text-ink mb-2">

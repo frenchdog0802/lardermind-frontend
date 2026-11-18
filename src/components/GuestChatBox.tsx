@@ -66,7 +66,8 @@ export function GuestChatBox({
   );
   const [guestToken, setGuestToken] = useState<string | null>(() => readGuestToken());
   const [mintError, setMintError] = useState<string | null>(null);
-  const [minting, setMinting] = useState(!readGuestToken());
+  const [minting, setMinting] = useState(false);
+  const mintPromiseRef = useRef<Promise<string | null> | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<GuestMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -106,43 +107,37 @@ export function GuestChatBox({
     [guestToken],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    async function ensureGuest() {
+  // Guest session is created lazily on the first send so the input is usable instantly.
+  const ensureGuestToken = useCallback(async (): Promise<string | null> => {
+    const existing = guestToken ?? readGuestToken();
+    if (existing) {
+      if (!guestToken) setGuestToken(existing);
+      return existing;
+    }
+    if (mintPromiseRef.current) return mintPromiseRef.current;
+    const pending = (async () => {
       setMinting(true);
       try {
-        let token = readGuestToken();
-        if (!token) {
-          const res = await auth.mintGuest();
-          if (cancelled) return;
-          if (!res.success || !res.data?.token) {
-            setMintError(res.message || t('ai.guestMintFailed'));
-            return;
-          }
-          token = res.data.token;
-          writeGuestToken(token);
+        const res = await auth.mintGuest();
+        if (!res.success || !res.data?.token) {
+          setMintError(res.message || t('ai.guestMintFailed'));
+          return null;
         }
-        setGuestToken(token);
+        writeGuestToken(res.data.token);
+        setGuestToken(res.data.token);
         setMintError(null);
-        const sessionRes = await chatApi.createSession(undefined, {
-          bearerToken: token,
-        });
-        if (!cancelled && sessionRes.success && sessionRes.data?.id) {
-          setSessionId(sessionRes.data.id);
-        }
+        return res.data.token;
       } catch {
-        if (!cancelled) {
-          setMintError(t('ai.guestMintFailed'));
-        }
+        setMintError(t('ai.guestMintFailed'));
+        return null;
       } finally {
-        if (!cancelled) setMinting(false);
+        setMinting(false);
+        mintPromiseRef.current = null;
       }
-    }
-    void ensureGuest();
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
+    })();
+    mintPromiseRef.current = pending;
+    return pending;
+  }, [guestToken, t]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -186,7 +181,7 @@ export function GuestChatBox({
 
   const runExchange = async (prompt: string) => {
     const trimmed = prompt.trim();
-    if (!trimmed || isTyping || !guestToken || minting) return;
+    if (!trimmed || isTyping || minting) return;
 
     setMessages((prev) => [
       ...prev,
@@ -203,6 +198,17 @@ export function GuestChatBox({
     ]);
 
     try {
+      const token = await ensureGuestToken();
+      if (!token) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: t('ai.guestMintFailed'), type: 'error' }
+              : m,
+          ),
+        );
+        return;
+      }
       await chatApi.streamSend(
         { message: trimmed, sessionId: sessionId ?? undefined },
         {
@@ -214,6 +220,7 @@ export function GuestChatBox({
             );
           },
           onStatus: () => undefined,
+          onSession: (sid) => setSessionId((current) => current ?? sid),
           onInterrupt: (response) => {
             const tools =
               (response.data?.pendingTools as PendingToolSummary[] | undefined) ?? [];
@@ -282,7 +289,7 @@ export function GuestChatBox({
           },
         },
         undefined,
-        authOpts,
+        { bearerToken: token },
       );
     } finally {
       setIsTyping(false);
@@ -349,7 +356,7 @@ export function GuestChatBox({
   const chatHeightClass =
     size === 'large' ? 'min-h-[440px] max-h-[520px]' : 'min-h-[360px] max-h-[420px]';
 
-  const busy = isTyping || minting || !guestToken;
+  const busy = isTyping || minting;
 
   return (
     <div className={`w-full ${className}`}>
@@ -474,7 +481,7 @@ export function GuestChatBox({
         </div>
 
         <form onSubmit={handleSubmit} className="border-t border-line p-3">
-          {(minting || !guestToken) && !mintError ? (
+          {minting && !mintError ? (
             <p className="mb-2 text-center text-xs text-muted" aria-live="polite">
               {t('ai.guestStarting')}
             </p>
@@ -496,7 +503,7 @@ export function GuestChatBox({
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value)}
                 placeholder={
-                  minting || !guestToken ? t('ai.guestStarting') : t('ai.placeholder')
+                  minting ? t('ai.guestStarting') : t('ai.placeholder')
                 }
                 className="w-full rounded-xl border border-line px-4 py-2.5 pr-11 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-herb/30"
                 disabled={busy}

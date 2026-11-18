@@ -27,7 +27,13 @@ import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSel
 import { AppHeader } from './AppHeader';
 import { PantryImageReviewModal } from './PantryImageReviewModal';
 import { isAscii } from '../utils/isAscii';
-import { resolveSelectedUnit, unitSelectOptions, type MeasurementSystem } from '../utils/units';
+import {
+  mergeQuantities,
+  resolveSelectedUnit,
+  stepForUnit,
+  unitSelectOptions,
+  type MeasurementSystem,
+} from '../utils/units';
 
 interface PantryInventoryProps {
     onBack: () => void;
@@ -66,6 +72,10 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
     const [reviewPreviewUrl, setReviewPreviewUrl] = useState<string | null>(null);
     const [reviewEmptyMessage, setReviewEmptyMessage] = useState<string | null>(null);
     const visionInputRef = useRef<HTMLInputElement>(null);
+    const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingDraft, setEditingDraft] = useState('');
 
     // Pantry item search dropdown????? name???? debounce??
     const { filteredIngredients: filteredPantryIngredients, loading: pantryLoading } = useSearchIngredients(
@@ -127,13 +137,37 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         setSelectedIndex(-1);
     };
 
+    const showToast = (text: string, undo?: () => void) => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast({ text, undo });
+        toastTimerRef.current = setTimeout(() => setToast(null), undo ? 8000 : 3500);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        };
+    }, []);
+
+    const startEditingQuantity = (item: PantryItem) => {
+        setEditingId(item.id);
+        setEditingDraft(String(item.quantity));
+    };
+
+    const commitEditingQuantity = (item: PantryItem) => {
+        const value = Number(editingDraft);
+        setEditingId(null);
+        if (editingDraft.trim() === '' || !Number.isFinite(value) || value < 0) return;
+        if (value !== item.quantity) {
+            updatePantryItem({ ...item, quantity: value });
+        }
+    };
+
     const handleUpdateQuantity = (itemName: string, amount: number) => {
         const item = pantryItems.find(item => item.name === itemName);
         if (item) {
-            const newQuantity = item.quantity + amount;
-            if (newQuantity >= 0) {
-                updatePantryItem({ ...item, quantity: newQuantity });
-            }
+            const newQuantity = Number((item.quantity + amount).toFixed(10));
+            updatePantryItem({ ...item, quantity: Math.max(0, newQuantity) });
         }
     };
 
@@ -141,6 +175,11 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         const item = pantryItems.find(item => item.name === itemName);
         if (item && removePantryItem) {
             removePantryItem(item.id);
+            const { id: _removedId, ...restoreFields } = item;
+            showToast(t('pantry.removed', { name: item.name }), () => {
+                addPantryItem(restoreFields);
+                setToast(null);
+            });
         }
     };
 
@@ -161,11 +200,30 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         // Check if item already exists
         const existingItem = pantryItems.find(item => item.name.toLowerCase() === newItem.name.toLowerCase());
         if (existingItem) {
-            updatePantryItem({
-                ...existingItem,
-                quantity: newItem.quantity,
-                unit: displayedUnit || existingItem.unit,
-            });
+            // Merge into the existing row when the units are compatible.
+            const merged = mergeQuantities(
+                existingItem.quantity,
+                existingItem.unit,
+                newItem.quantity,
+                displayedUnit || existingItem.unit,
+            );
+            if (merged !== null) {
+                updatePantryItem({ ...existingItem, quantity: merged });
+                showToast(
+                    t('pantry.merged', {
+                        name: existingItem.name,
+                        quantity: merged,
+                        unit: existingItem.unit,
+                    }),
+                );
+            } else {
+                updatePantryItem({
+                    ...existingItem,
+                    quantity: newItem.quantity,
+                    unit: displayedUnit || existingItem.unit,
+                });
+                showToast(t('pantry.replaced', { name: existingItem.name }));
+            }
         } else {
             // Add new item
             addPantryItem({ ...newItem, unit: displayedUnit });
@@ -260,6 +318,23 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                             void handleVisionFileChange(e);
                         }}
                     />
+                    {toast && (
+                        <div
+                            role="status"
+                            className="mb-4 p-3 bg-sage/50 border border-line rounded-xl text-herb-deep text-sm font-medium flex items-center justify-between gap-3"
+                        >
+                            <span>{toast.text}</span>
+                            {toast.undo && (
+                                <button
+                                    type="button"
+                                    onClick={toast.undo}
+                                    className="shrink-0 underline font-semibold"
+                                >
+                                    {t('pantry.undo')}
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <div className="relative mb-4">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <SearchIcon size={18} className="text-muted" />
@@ -286,7 +361,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                                 : t('pantryVision.scan')}
                         </button>
                         {recognizeError ? (
-                            <p className="text-sm text-danger" role="alert">
+                            <p className="text-sm text-red-700" role="alert">
                                 {recognizeError}
                             </p>
                         ) : null}
@@ -462,7 +537,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                                     >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-baseline gap-2">
-                                                <h3 className="text-base font-semibold text-ink truncate">{item.name}</h3>
+                                                <h3 className="text-base font-semibold text-ink truncate capitalize">{item.name}</h3>
                                             </div>
                                             {(planned > 0 || toBuy > 0) && (
                                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm">
@@ -482,26 +557,51 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
 
                                         <div className="flex items-center gap-1.5 shrink-0">
                                             <button
-                                                onClick={() => handleUpdateQuantity(item.name, -0.5)}
+                                                onClick={() => handleUpdateQuantity(item.name, -stepForUnit(item.unit))}
                                                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-sage/50 hover:bg-sage text-ink transition-colors"
                                                 aria-label={`Decrease ${item.name}`}
                                             >
                                                 <MinusIcon size={16} />
                                             </button>
                                             <div className="min-w-[3.25rem] text-center">
-                                                <span className={`text-lg font-bold tabular-nums leading-none ${isOut ? 'text-amber-800' : 'text-ink'}`}>
-                                                    <QuantityLabel
-                                                        quantity={item.quantity}
-                                                        unit={item.unit}
-                                                        unitKind={item.unit_kind}
-                                                        baseUnit={item.base_unit}
-                                                        defaultDisplayUnit={item.default_display_unit}
-                                                        measurementSystem={measurementSystem}
+                                                {editingId === item.id ? (
+                                                    <input
+                                                        type="number"
+                                                        inputMode="decimal"
+                                                        min={0}
+                                                        step="any"
+                                                        autoFocus
+                                                        value={editingDraft}
+                                                        onChange={e => setEditingDraft(e.target.value)}
+                                                        onBlur={() => commitEditingQuantity(item)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') commitEditingQuantity(item);
+                                                            if (e.key === 'Escape') setEditingId(null);
+                                                        }}
+                                                        aria-label={t('pantry.editQuantity', { name: item.name })}
+                                                        className="w-20 rounded-lg border border-line px-2 py-1 text-center text-base font-bold tabular-nums"
                                                     />
-                                                </span>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => startEditingQuantity(item)}
+                                                        title={t('pantry.editQuantity', { name: item.name })}
+                                                        aria-label={t('pantry.editQuantity', { name: item.name })}
+                                                        className={`text-lg font-bold tabular-nums leading-none ${isOut ? 'text-amber-800' : 'text-ink'}`}
+                                                    >
+                                                        <QuantityLabel
+                                                            quantity={item.quantity}
+                                                            unit={item.unit}
+                                                            unitKind={item.unit_kind}
+                                                            baseUnit={item.base_unit}
+                                                            defaultDisplayUnit={item.default_display_unit}
+                                                            measurementSystem={measurementSystem}
+                                                        />
+                                                    </button>
+                                                )}
                                             </div>
                                             <button
-                                                onClick={() => handleUpdateQuantity(item.name, 0.5)}
+                                                onClick={() => handleUpdateQuantity(item.name, stepForUnit(item.unit))}
                                                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-herb hover:bg-herb-deep text-white transition-colors"
                                                 aria-label={`Increase ${item.name}`}
                                             >
