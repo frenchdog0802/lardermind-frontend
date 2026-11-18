@@ -3,6 +3,9 @@ import { subscriptionApi, type SubscriptionStatus } from '../api/subscription';
 import { shouldClearOutboundRedirectLoading } from '../utils/outboundRedirectLoading';
 import { UpgradeButtons } from './UpgradeButtons';
 
+const CHECKOUT_STATUS_POLL_MS = 3000;
+const CHECKOUT_STATUS_POLL_MAX = 5;
+
 interface SubscriptionPanelProps {
   /** When false (keep-alive hidden), skip fetch; refetch when becoming true. */
   active?: boolean;
@@ -46,6 +49,26 @@ export function SubscriptionPanel({
     void load();
   }, [active, checkoutSuccess, portalReturn]);
 
+  // After Stripe Checkout the webhook can land a few seconds after the redirect.
+  // Re-check status a bounded number of times until Pro shows up (no endless loop).
+  const statusIsPro = status?.isPro ?? false;
+  useEffect(() => {
+    if (!active || !checkoutSuccess || statusIsPro) return;
+    let attempts = 0;
+    const timer = window.setInterval(async () => {
+      attempts += 1;
+      try {
+        const next = await subscriptionApi.getStatus();
+        setStatus(next);
+        if (next.isPro) window.clearInterval(timer);
+      } catch {
+        // keep the last known status; give up after the cap below
+      }
+      if (attempts >= CHECKOUT_STATUS_POLL_MAX) window.clearInterval(timer);
+    }, CHECKOUT_STATUS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [active, checkoutSuccess, statusIsPro]);
+
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (shouldClearOutboundRedirectLoading(event)) {
@@ -88,7 +111,9 @@ export function SubscriptionPanel({
     <div className="space-y-6">
       {checkoutSuccess && (
         <div className="border border-herb bg-sage/30 p-4 text-sm text-ink">
-          Payment received. Your Pro subscription should activate shortly.
+          {status.isPro
+            ? 'Payment received. Your Pro subscription is active.'
+            : 'Payment received. Your Pro subscription should activate shortly.'}
         </div>
       )}
 
