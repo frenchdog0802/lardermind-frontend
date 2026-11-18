@@ -106,7 +106,25 @@
     "googleSignUpFailed": "Google 註冊失敗",
     "googleSignUpRetry": "Google 註冊失敗，請再試一次。",
     "googleSignUpCancelled": "已取消或 Google 註冊失敗。",
-    "logIn": "登入"
+    "logIn": "登入",
+    "forgotTitle": "重設密碼",
+    "forgotSubtitle": "輸入你在 LarderMind 使用的電子郵件，我們會寄給你重設連結。",
+    "sendResetLink": "寄送重設連結",
+    "resetRequestSent": "如果這個電子郵件有對應的帳號，我們已寄出重設密碼的連結。連結將在 1 小時後失效。",
+    "googleAccountHint": "使用 Google 註冊？你可以繼續使用「使用 Google 登入」，不需要密碼。",
+    "backToLogin": "返回登入",
+    "resetTitle": "設定新密碼",
+    "newPassword": "新密碼",
+    "setNewPassword": "設定新密碼",
+    "resetSuccess": "密碼已更新，現在可以使用新密碼登入。",
+    "resetInvalidLink": "此重設連結無效或已過期，請重新申請。",
+    "requestNewLink": "重新申請連結",
+    "tooManyAttempts": "嘗試次數過多，請稍後再試。"
+  },
+  "notFound": {
+    "title": "找不到頁面",
+    "body": "你要找的頁面不存在或已移動。",
+    "home": "回到首頁"
   },
   "settings": {
     "title": "設定",

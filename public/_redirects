@@ -1,1 +1,11 @@
-/*    /index.html   200
+# Known SPA entry points -> index.html with 200. Keep in sync with src/utils/appRoutes.ts
+# (SPA_REWRITE_PATHS). "/" and real files (assets, /legal/*.html, robots.txt, ...) are
+# served as-is. Every other path falls through to 404.html (a build-time copy of
+# index.html, see vite.config.js) with HTTP 404, and the SPA renders its NotFound page.
+/app               /index.html   200
+/app/*             /index.html   200
+/login             /index.html   200
+/signup            /index.html   200
+/pricing           /index.html   200
+/forgot-password   /index.html   200
+/reset-password    /index.html   200

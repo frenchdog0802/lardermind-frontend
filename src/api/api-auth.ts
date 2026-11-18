@@ -55,6 +55,11 @@ export const auth = {
     api.post<{ claimed: boolean }>('/api/auth/claim-guest', {
       guest_token: guestToken,
     }),
+  /** Always resolves with a generic message (the API never reveals whether the email exists). */
+  requestPasswordReset: (email: string) =>
+    api.post<{ message: string }>('/api/auth/password-reset/request', { email }),
+  confirmPasswordReset: (token: string, password: string) =>
+    api.post<{ reset: boolean }>('/api/auth/password-reset/confirm', { token, password }),
 };
 
 /** After real auth, claim guest kitchen if a guest token remains (e.g. Google redirect). */

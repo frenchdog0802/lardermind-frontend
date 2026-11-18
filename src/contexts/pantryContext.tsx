@@ -16,6 +16,7 @@ import { mergeShoppingWrite } from '../api/shoppingSync';
 import { mealPlanApi } from '../api/mealPlan';
 import { userPreferencesApi } from '../api/userPreferences';
 import { resolveStoredLanguage } from '../i18n';
+import { useAuth } from './authContext';
 
 function unwrapListResponse<T>(data: T[] | Record<string, T[] | undefined>, key: string): T[] {
   if (Array.isArray(data)) {
@@ -187,6 +188,7 @@ export function PantryProvider({
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
   const [mealPlansLoading, setMealPlansLoading] = useState(false);
+  const { isAuthenticated } = useAuth();
   const [userSettings, setUserSettings] = useState<UserSettings>({
     name: '',
     language: resolveStoredLanguage(),
@@ -194,6 +196,8 @@ export function PantryProvider({
   });
 
   useEffect(() => {
+    // Preferences are per-user; never call the authenticated endpoint while logged out.
+    if (!isAuthenticated) return;
     let cancelled = false;
     (async () => {
       try {
@@ -209,7 +213,7 @@ export function PantryProvider({
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [isAuthenticated]);
 
   const fetchAllFolders = async () => {
     try {

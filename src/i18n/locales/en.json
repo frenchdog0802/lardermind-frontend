@@ -106,7 +106,25 @@
     "googleSignUpFailed": "Google sign up failed",
     "googleSignUpRetry": "Google sign up failed. Please try again.",
     "googleSignUpCancelled": "Google sign up was cancelled or failed.",
-    "logIn": "Log in"
+    "logIn": "Log in",
+    "forgotTitle": "Reset your password",
+    "forgotSubtitle": "Enter the email you use for LarderMind and we'll send you a reset link.",
+    "sendResetLink": "Send reset link",
+    "resetRequestSent": "If an account exists for that email, we sent a link to reset your password. The link expires in 1 hour.",
+    "googleAccountHint": "Signed up with Google? You can keep using \"Sign in with Google\" — no password needed.",
+    "backToLogin": "Back to sign in",
+    "resetTitle": "Choose a new password",
+    "newPassword": "New password",
+    "setNewPassword": "Set new password",
+    "resetSuccess": "Your password has been updated. You can now sign in with it.",
+    "resetInvalidLink": "This reset link is invalid or has expired. Please request a new one.",
+    "requestNewLink": "Request a new link",
+    "tooManyAttempts": "Too many attempts. Please try again later."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The page you're looking for doesn't exist or has moved.",
+    "home": "Go to the home page"
   },
   "settings": {
     "title": "Settings",
