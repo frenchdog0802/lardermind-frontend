@@ -85,34 +85,44 @@ function RevealOnScroll({ children, className = '' }: { children: ReactNode; cla
   );
 }
 
+/**
+ * Above-the-fold hero. A plain eager, high-priority <img> is always painted first so the
+ * hero is never blank while the Remotion Player measures its container / buffers its
+ * own <Img>; the animated Player (when motion is allowed) is layered on top of it.
+ */
 function HeroVisual({ prefersReducedMotion }: { prefersReducedMotion: boolean }) {
-  if (prefersReducedMotion) {
-    return (
-      <>
-        <img src={HERO_IMAGE} alt="" className="h-full w-full object-cover" />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(to top, rgba(243, 240, 232, 0.88) 0%, rgba(243, 240, 232, 0.45) 55%, rgba(243, 240, 232, 0.12) 100%)',
-          }}
-        />
-      </>
-    );
-  }
-
   return (
-    <Player
-      component={HeroScene}
-      durationInFrames={HERO_DURATION_FRAMES}
-      compositionWidth={HERO_WIDTH}
-      compositionHeight={HERO_HEIGHT}
-      fps={HERO_FPS}
-      loop
-      autoPlay
-      acknowledgeRemotionLicense
-      style={{ width: '100%', height: '100%' }}
-    />
+    <>
+      <img
+        src={HERO_IMAGE}
+        alt=""
+        loading="eager"
+        decoding="async"
+        // React 18 has no camelCase fetchPriority prop; pass the raw attribute.
+        {...{ fetchpriority: 'high' }}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(to top, rgba(243, 240, 232, 0.88) 0%, rgba(243, 240, 232, 0.45) 55%, rgba(243, 240, 232, 0.12) 100%)',
+        }}
+      />
+      {!prefersReducedMotion && (
+        <Player
+          component={HeroScene}
+          durationInFrames={HERO_DURATION_FRAMES}
+          compositionWidth={HERO_WIDTH}
+          compositionHeight={HERO_HEIGHT}
+          fps={HERO_FPS}
+          loop
+          autoPlay
+          acknowledgeRemotionLicense
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+        />
+      )}
+    </>
   );
 }
 
