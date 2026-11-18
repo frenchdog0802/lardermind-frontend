@@ -313,3 +313,45 @@ export function resolveIngredientUnits(ing: {
     baseUnit;
   return { kind, baseUnit, displayUnit };
 }
+
+/** Sensible +/- step for a quantity stepper, based on the unit being edited. */
+export function stepForUnit(unit?: string | null): number {
+  switch (normalizeUnit(unit)) {
+    case 'g':
+    case 'ml':
+      return 100;
+    case 'kg':
+    case 'l':
+    case 'lb':
+    case 'cup':
+      return 0.5;
+    case 'oz':
+    case 'tsp':
+    case 'tbsp':
+      return 1;
+    default:
+      // pcs and other count units step by whole items
+      return 1;
+  }
+}
+
+/**
+ * Add `addQuantity addUnit` onto `existingQuantity existingUnit`, expressed in the
+ * existing unit. Returns null when the units cannot be combined (different kinds).
+ */
+export function mergeQuantities(
+  existingQuantity: number,
+  existingUnit: string,
+  addQuantity: number,
+  addUnit: string,
+): number | null {
+  const from = normalizeUnit(addUnit);
+  const to = normalizeUnit(existingUnit);
+  if (!from || !to) return from === to ? existingQuantity + addQuantity : null;
+  try {
+    const converted = convert(addQuantity, from, to);
+    return Number((existingQuantity + converted).toFixed(10));
+  } catch {
+    return null;
+  }
+}

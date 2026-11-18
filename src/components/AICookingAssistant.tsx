@@ -7,6 +7,7 @@
   type ChangeEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { splitInstructionSteps } from '../utils/recipeSteps';
 import { ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { chatApi, ChatResponse, ChatSession, HistoryMessage, PendingToolSummary } from '../api/chat';
@@ -647,6 +648,11 @@ export function AICookingAssistant({
               void restorePendingApproval(activeSessionId);
             }
           },
+          onSession: (sessionId) => {
+            // First message of a new chat: remember the server-created session so the
+            // next message continues the same conversation (history + one Recents entry).
+            setActiveSessionId((current) => current ?? sessionId);
+          },
           onSessionTitle: ({ sessionId, title }) => {
             setSessions((prev) => {
               const idx = prev.findIndex((s) => s.id === sessionId);
@@ -998,7 +1004,7 @@ export function AICookingAssistant({
                 <div className="mb-6">
                   <h3 className="font-medium text-ink mb-2">{t('ai.instructions')}</h3>
                   <ol className="space-y-3">
-                    {selectedRecipe.instructions.map((step: string, index: number) => (
+                    {splitInstructionSteps(selectedRecipe.instructions).map((step: string, index: number) => (
                       <li key={index} className="flex">
                         <div className="bg-sage rounded-full w-6 h-6 flex items-center justify-center text-herb-deep font-medium mr-3 flex-shrink-0 mt-0.5">
                           {index + 1}

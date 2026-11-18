@@ -17,6 +17,7 @@ import { mealPlanApi } from '../api/mealPlan';
 import { userPreferencesApi } from '../api/userPreferences';
 import { resolveStoredLanguage } from '../i18n';
 import { useAuth } from './authContext';
+import { splitInstructionSteps } from '../utils/recipeSteps';
 
 function unwrapListResponse<T>(data: T[] | Record<string, T[] | undefined>, key: string): T[] {
   if (Array.isArray(data)) {
@@ -28,13 +29,13 @@ function unwrapListResponse<T>(data: T[] | Record<string, T[] | undefined>, key:
 
 function normalizeInstructions(raw: unknown, stepsFallback?: unknown): string[] {
   if (Array.isArray(raw)) {
-    return raw.map(String).map(s => s.trim()).filter(Boolean);
+    return splitInstructionSteps(raw);
   }
   if (typeof raw === 'string' && raw.trim()) {
-    return raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    return splitInstructionSteps(raw);
   }
   if (Array.isArray(stepsFallback)) {
-    return stepsFallback.map(String).map(s => s.trim()).filter(Boolean);
+    return splitInstructionSteps(stepsFallback);
   }
   return [];
 }

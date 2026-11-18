@@ -91,6 +91,8 @@ export interface StreamSendHandlers {
     onStatus?: (status: { tool?: string; message: string }) => void;
     onInterrupt?: (response: ChatResponse) => void;
     onSessionTitle?: (payload: { sessionId: string; title: string }) => void;
+    /** Server-assigned session id for this turn; reuse it for follow-up messages. */
+    onSession?: (sessionId: string) => void;
 }
 
 export type ChatAuthOptions = {
@@ -188,6 +190,18 @@ function parseSseEvent(block: string, handlers: StreamSendHandlers) {
         return;
     }
 
+    if (eventName === 'session') {
+        try {
+            const parsed = JSON.parse(data) as { sessionId?: string };
+            if (parsed.sessionId?.trim()) {
+                handlers.onSession?.(parsed.sessionId.trim());
+            }
+        } catch {
+            // ignore malformed session events
+        }
+        return;
+    }
+
     if (eventName === 'session_title') {
         try {
             const parsed = JSON.parse(data) as { sessionId?: string; title?: string };
@@ -227,6 +241,7 @@ async function consumeSseStream(
         onToken: handlers.onToken,
         onStatus: handlers.onStatus,
         onSessionTitle: handlers.onSessionTitle,
+        onSession: handlers.onSession,
         onInterrupt: (response) => {
             // HITL interrupt is a terminal SSE event (no `done`); do not treat stream end as failure.
             receivedTerminalEvent = true;

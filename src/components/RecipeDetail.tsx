@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { splitInstructionSteps } from '../utils/recipeSteps';
 import { ArrowLeftIcon, CheckCircleIcon, ShoppingCartIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { IngredientEntry, Recipe } from '../api/types';
@@ -80,7 +81,7 @@ export function RecipeDetail({
                       />{' '}
                     </>
                   )}
-                  {ingredient.name}
+                  <span className="capitalize">{ingredient.name}</span>
                 </span>
                 {availability === 'missing' && <button className="text-muted flex items-center text-sm font-medium bg-surface px-3 py-1 rounded-lg border border-line">
                   <ShoppingCartIcon size={16} className="mr-1" />
@@ -95,7 +96,7 @@ export function RecipeDetail({
           <h3 className="text-xl font-bold text-ink mb-4">Instructions</h3>
           {(recipe.instructions?.length ?? 0) > 0 ? (
             <ol className="space-y-5">
-              {recipe.instructions.map((step: any, index: number) => <li key={index} className="flex">
+              {splitInstructionSteps(recipe.instructions).map((step: string, index: number) => <li key={index} className="flex">
                 <div className="bg-sage rounded-full w-8 h-8 flex items-center justify-center text-herb-deep font-semibold mr-4 flex-shrink-0 mt-0.5">
                   {index + 1}
                 </div>

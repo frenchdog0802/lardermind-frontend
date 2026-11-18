@@ -96,3 +96,18 @@ describe('web HITL pending must stay actionable', () => {
     assert.match(src, /loadHistoryForSession\(approval\.sessionId\)/);
   });
 });
+
+describe('web chat session reuse', () => {
+  it('parses the server session SSE event and forwards it through the stream wrapper', () => {
+    const src = readFileSync(join(root, 'src/api/chat.ts'), 'utf8');
+    assert.match(src, /eventName === 'session'[\s\S]{0,200}handlers\.onSession\?\.\(/);
+    assert.match(src, /onSession:\s*handlers\.onSession/);
+  });
+
+  it('adopts the server session id in the assistant and the guest chat', () => {
+    const assistant = readFileSync(join(root, 'src/components/AICookingAssistant.tsx'), 'utf8');
+    assert.match(assistant, /onSession:\s*\(sessionId\)\s*=>\s*\{[\s\S]{0,300}setActiveSessionId\(/);
+    const guest = readFileSync(join(root, 'src/components/GuestChatBox.tsx'), 'utf8');
+    assert.match(guest, /onSession:\s*\(sid\)\s*=>\s*setSessionId\(/);
+  });
+});

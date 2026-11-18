@@ -100,6 +100,8 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
 
     const filteredShoppingItems = useMemo(() => {
         return shoppingList.filter(item => {
+            // Items already moved to the pantry leave "Items to Buy".
+            if (item.checked && item.synced_to_pantry) return false;
             const isEnglish = isAscii(item.name);
             return isEnglish
                 ? item.name.toLowerCase().includes(shoppingSearchQuery.toLowerCase())
@@ -186,7 +188,16 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
             applyCheckedLocally(id, updatedItem.checked);
             if (shoppingSearchQuery) setShoppingSearchQuery('');
             if (updatedItem.checked) {
-                showToast(t('shopping.purchasedOnly'));
+                // One step: checking off also adds the item to the pantry (with Undo).
+                const syncRes = await syncShoppingItemsToPantry([{ id }]);
+                const syncedIds = syncRes.success && syncRes.data
+                    ? syncRes.data.synced.map(i => i.id)
+                    : [];
+                if (syncedIds.length > 0) {
+                    showToast(t('shopping.itemAddedToPantry', { name: item.name }), syncedIds);
+                } else {
+                    showToast(t('shopping.purchasedOnly'));
+                }
             }
         }
     };
@@ -238,7 +249,15 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                     )
                 );
                 if (shoppingSearchQuery) setShoppingSearchQuery('');
-                showToast(t('shopping.allPurchased', { count: unchecked.length }));
+                const syncRes = await syncShoppingItemsToPantry(unchecked.map(item => ({ id: item.id })));
+                const syncedIds = syncRes.success && syncRes.data
+                    ? syncRes.data.synced.map(i => i.id)
+                    : [];
+                if (syncedIds.length > 0) {
+                    showToast(t('shopping.syncSuccess', { count: syncedIds.length }), syncedIds);
+                } else {
+                    showToast(t('shopping.allPurchased', { count: unchecked.length }));
+                }
             } else {
                 await fetchAllShoppingListItems();
                 const conflict = results.some(res => res.code === 'version_conflict');
@@ -280,7 +299,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
             if (res.success && res.data) {
                 const ids = res.data.synced.map(i => i.id);
                 setShowReview(false);
-                showToast(t('shopping.syncSuccess', { n: ids.length }), ids);
+                showToast(t('shopping.syncSuccess', { count: ids.length }), ids);
             }
         } finally {
             setIsSyncing(false);
@@ -293,7 +312,13 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         setUndoIds(null);
         setShowMessage(false);
         if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-        await unsyncShoppingItemsFromPantry(ids);
+        const res = await unsyncShoppingItemsFromPantry(ids);
+        if (res.success && res.data) {
+            // Undo fully reverts the check-off so the item returns to Items to Buy.
+            for (const restored of res.data.unsynced) {
+                await updateShoppingListItem({ ...restored, checked: false });
+            }
+        }
     };
 
     return (
@@ -465,7 +490,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                             onClick={openReviewSheet}
                             className="w-full mb-4 flex items-center justify-center gap-2 bg-herb text-white font-medium py-3 px-4 rounded-xl shadow-sm hover:bg-herb-deep transition-colors"
                         >
-                            {t('shopping.syncToPantry', { n: pendingSyncItems.length })}
+                            {t('shopping.syncToPantry', { count: pendingSyncItems.length })}
                         </button>
                     )}
 
@@ -558,7 +583,9 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                     <div className="bg-surface w-full max-w-lg rounded-2xl shadow-xl border border-line max-h-[85vh] flex flex-col">
                         <div className="p-4 border-b border-line">
                             <h3 className="font-semibold text-ink text-lg">{t('shopping.syncReviewTitle')}</h3>
-                            <p className="text-sm text-muted mt-1">{t('shopping.syncNonFoodHint')}</p>
+                            {reviewDrafts.some(d => !d.hasIngredient) && (
+                                <p className="text-sm text-muted mt-1">{t('shopping.syncNonFoodHint')}</p>
+                            )}
                         </div>
                         <ul className="overflow-y-auto flex-1 divide-y divide-line">
                             {reviewDrafts.map((draft, idx) => (
@@ -576,9 +603,6 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                                     />
                                     <div className="flex-1 min-w-0 space-y-2">
                                         <div className="font-medium text-ink capitalize">{draft.name}</div>
-                                        {!draft.hasIngredient && (
-                                            <div className="text-xs text-muted">{t('shopping.syncNonFoodHint')}</div>
-                                        )}
                                         <div className="flex gap-2">
                                             <NumberInput
                                                 min={0.1}

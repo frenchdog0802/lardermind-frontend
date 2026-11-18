@@ -73,7 +73,7 @@ export function SignUp({ onSignUpSuccess, onLogin }: SignUpProps) {
               <>
                 <form onSubmit={handleSubmit} className="space-y-5">
                   {error && (
-                    <div className="bg-sage/60 text-herb-deep p-3 rounded-lg text-sm border border-line">
+                    <div role="alert" className="bg-red-50 text-red-700 p-3 rounded-lg text-sm border border-red-200">
                       {error}
                     </div>
                   )}

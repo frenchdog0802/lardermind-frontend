@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
+import { splitInstructionSteps } from '../utils/recipeSteps';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeftIcon, ChevronRightIcon, CheckIcon, PackageIcon, ImageIcon, PlusIcon, TrashIcon, XIcon, AlertCircleIcon, SearchIcon, ChevronDownIcon, CalendarIcon, ListIcon, MoreHorizontalIcon, ChevronUpIcon, ShoppingCartIcon } from 'lucide-react';
 import { usePantry, normalizeRecipe } from '../contexts/pantryContext';
@@ -1269,7 +1270,7 @@ export function Calendar({
                 <h3 className="text-lg font-semibold text-ink mb-4">Instructions</h3>
                 {(selectedRecipeForDetail.instructions?.length ?? 0) > 0 ? (
                   <ol className="space-y-3">
-                    {selectedRecipeForDetail.instructions.map((step, index) => (
+                    {splitInstructionSteps(selectedRecipeForDetail.instructions).map((step, index) => (
                       <li key={index} className="flex">
                         <div className="bg-sage rounded-full w-6 h-6 flex items-center justify-center text-herb-deep font-medium mr-3 flex-shrink-0 mt-0.5 text-sm">
                           {index + 1}

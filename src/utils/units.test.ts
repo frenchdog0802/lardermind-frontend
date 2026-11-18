@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { formatQuantity, resolveSelectedUnit, unitSelectOptions } from './units.ts';
+import {
+  formatQuantity,
+  mergeQuantities,
+  resolveSelectedUnit,
+  stepForUnit,
+  unitSelectOptions,
+} from './units.ts';
 
 describe('formatQuantity with non-canonical stored units', () => {
   it('shows 1 l for a pantry row stored as 1 l (was "0 l")', () => {
@@ -47,5 +53,35 @@ describe('unit select default', () => {
     assert.equal(options[0], 'g');
     assert.equal(resolveSelectedUnit('', options), 'g');
     assert.equal(resolveSelectedUnit('ml', options), 'ml');
+  });
+});
+
+describe('stepForUnit', () => {
+  it('uses coarse steps for small metric units', () => {
+    assert.equal(stepForUnit('g'), 100);
+    assert.equal(stepForUnit('ml'), 100);
+  });
+  it('uses whole steps for counts and 0.5 for kg / l', () => {
+    assert.equal(stepForUnit('pcs'), 1);
+    assert.equal(stepForUnit('bunch'), 1);
+    assert.equal(stepForUnit('kg'), 0.5);
+    assert.equal(stepForUnit('liter'), 0.5);
+  });
+  it('falls back to 1 for unknown units', () => {
+    assert.equal(stepForUnit('pack'), 1);
+    assert.equal(stepForUnit(''), 1);
+  });
+});
+
+describe('mergeQuantities', () => {
+  it('adds same-unit quantities', () => {
+    assert.equal(mergeQuantities(2, 'pcs', 3, 'pcs'), 5);
+  });
+  it('converts compatible units into the existing unit', () => {
+    assert.equal(mergeQuantities(500, 'g', 1, 'kg'), 1500);
+  });
+  it('returns null for incompatible units', () => {
+    assert.equal(mergeQuantities(500, 'g', 1, 'l'), null);
+    assert.equal(mergeQuantities(2, 'pcs', 1, 'bunch'), null);
   });
 });
