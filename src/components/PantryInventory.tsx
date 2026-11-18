@@ -27,7 +27,7 @@ import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSel
 import { AppHeader } from './AppHeader';
 import { PantryImageReviewModal } from './PantryImageReviewModal';
 import { isAscii } from '../utils/isAscii';
-import type { MeasurementSystem } from '../utils/units';
+import { resolveSelectedUnit, unitSelectOptions, type MeasurementSystem } from '../utils/units';
 
 interface PantryInventoryProps {
     onBack: () => void;
@@ -144,19 +144,31 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         }
     };
 
+    const addFormUnitKind = preferredUnitForIngredient(
+        ingredients.find(i => i.name.toLowerCase() === newItem.name.toLowerCase()) || {
+            default_unit: newItem.unit,
+        },
+        measurementSystem
+    ).kind;
+
     const handleAddItem = () => {
         if (!newItem.name.trim()) return;
+        // Save exactly the unit the select shows (untouched form shows options[0], e.g. 'g').
+        const displayedUnit = resolveSelectedUnit(
+            newItem.unit,
+            unitSelectOptions(addFormUnitKind, measurementSystem, true),
+        );
         // Check if item already exists
         const existingItem = pantryItems.find(item => item.name.toLowerCase() === newItem.name.toLowerCase());
         if (existingItem) {
             updatePantryItem({
                 ...existingItem,
                 quantity: newItem.quantity,
-                unit: newItem.unit || existingItem.unit,
+                unit: displayedUnit || existingItem.unit,
             });
         } else {
             // Add new item
-            addPantryItem({ ...newItem });
+            addPantryItem({ ...newItem, unit: displayedUnit });
         }
         // Reset form
         setNewItem({
@@ -399,12 +411,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                                         className="w-1/3 p-2 rounded-lg"
                                     />
                                     <UnitSelect
-                                        kind={preferredUnitForIngredient(
-                                            ingredients.find(i => i.name.toLowerCase() === newItem.name.toLowerCase()) || {
-                                                default_unit: newItem.unit,
-                                            },
-                                            measurementSystem
-                                        ).kind}
+                                        kind={addFormUnitKind}
                                         value={newItem.unit}
                                         onChange={unit => setNewItem({ ...newItem, unit })}
                                         measurementSystem={measurementSystem}
