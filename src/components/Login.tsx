@@ -8,9 +8,10 @@ import { GoogleSignInButton } from './GoogleSignInButton';
 interface LoginProps {
   onLoginSuccess: () => void;
   onSignUp: () => void;
+  onForgotPassword?: () => void;
 }
 
-export function Login({ onSignUp, onLoginSuccess }: LoginProps) {
+export function Login({ onSignUp, onLoginSuccess, onForgotPassword }: LoginProps) {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -112,7 +113,15 @@ export function Login({ onSignUp, onLoginSuccess }: LoginProps) {
                         {t('auth.rememberMe')}
                       </label>
                     </div>
-                    <a href="#" className="text-sm text-herb hover:text-herb-deep">
+                    <a
+                      href="/forgot-password"
+                      onClick={(e) => {
+                        if (!onForgotPassword) return;
+                        e.preventDefault();
+                        onForgotPassword();
+                      }}
+                      className="text-sm text-herb hover:text-herb-deep"
+                    >
                       {t('auth.forgotPassword')}
                     </a>
                   </div>

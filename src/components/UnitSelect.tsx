@@ -1,13 +1,11 @@
 import {
   UnitKind,
   MeasurementSystem,
-  allowedUnits,
   displayUnitsForPreference,
   resolveIngredientUnits,
   formatQuantity,
-  WEIGHT_UNITS,
-  VOLUME_UNITS,
-  COUNT_UNITS,
+  unitSelectOptions,
+  resolveSelectedUnit,
 } from '../utils/units';
 
 interface UnitSelectProps {
@@ -31,24 +29,11 @@ export function UnitSelect({
   disabled = false,
 }: UnitSelectProps) {
   const resolvedKind = (kind as UnitKind | undefined) || undefined;
-
-  let options: string[];
-  if (!resolvedKind) {
-    // Unknown ingredient: let user pick any common unit
-    options = preferSystemUnits
-      ? [
-          ...displayUnitsForPreference('weight', measurementSystem),
-          ...displayUnitsForPreference('volume', measurementSystem),
-          ...COUNT_UNITS,
-        ]
-      : [...WEIGHT_UNITS, ...VOLUME_UNITS, ...COUNT_UNITS];
-  } else if (preferSystemUnits && resolvedKind !== 'count') {
-    options = displayUnitsForPreference(resolvedKind, measurementSystem);
-  } else {
-    options = allowedUnits(resolvedKind);
-  }
-
-  const current = value || options[0] || '';
+  // Unknown ingredient: let user pick any common unit
+  const options = unitSelectOptions(resolvedKind, measurementSystem, preferSystemUnits);
+  // Callers that save an untouched form must use resolveSelectedUnit() too, so the
+  // unit shown here is the unit persisted.
+  const current = resolveSelectedUnit(value, options);
   const opts = options.includes(current) ? options : [current, ...options];
 
   return (
@@ -71,7 +56,7 @@ export function UnitSelect({
   );
 }
 
-/** Format a stored base quantity for UI. */
+/** Format a stored quantity (expressed in `unit`) for UI. */
 export function QuantityLabel({
   quantity,
   unit,
@@ -91,7 +76,8 @@ export function QuantityLabel({
 }) {
   const { kind, baseUnit: base, displayUnit } = resolveIngredientUnits({
     unit_kind: unitKind,
-    base_unit: baseUnit || unit,
+    // Pantry / shopping / recipe rows store quantity in `unit` (no ml/g normalisation).
+    base_unit: unit || baseUnit,
     default_display_unit: defaultDisplayUnit,
     default_unit: unit,
   });

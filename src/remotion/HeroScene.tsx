@@ -27,7 +27,9 @@ export function HeroScene() {
   );
 
   return (
-    <AbsoluteFill style={{ backgroundColor: '#F3F0E8' }}>
+    // Transparent so the landing page's eager static hero <img> shows through until
+    // (and in case) the Player paints its own frame.
+    <AbsoluteFill style={{ backgroundColor: 'transparent' }}>
       <AbsoluteFill style={{ overflow: 'hidden' }}>
         <Img
           src={HERO_IMAGE}

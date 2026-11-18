@@ -11,9 +11,20 @@ describe('PantryInventory merge update', () => {
     const src = readFileSync(join(root, 'src/components/PantryInventory.tsx'), 'utf8');
     assert.match(
       src,
-      /updatePantryItem\(\{\s*\.\.\.existingItem,\s*quantity:\s*newItem\.quantity,\s*unit:\s*newItem\.unit/,
+      /updatePantryItem\(\{\s*\.\.\.existingItem,\s*quantity:\s*newItem\.quantity,\s*unit:\s*displayedUnit/,
       'merge path must send unit from the form',
     );
+  });
+
+  it('saves the unit the select displays when the user never touched it', () => {
+    const src = readFileSync(join(root, 'src/components/PantryInventory.tsx'), 'utf8');
+    assert.match(
+      src,
+      /const displayedUnit = resolveSelectedUnit\(\s*newItem\.unit,\s*unitSelectOptions\(addFormUnitKind, measurementSystem, true\)/,
+      'add path must resolve the unit exactly like UnitSelect (preferSystemUnits)',
+    );
+    assert.match(src, /addPantryItem\(\{ \.\.\.newItem, unit: displayedUnit \}\)/);
+    assert.match(src, /kind=\{addFormUnitKind\}[\s\S]{0,400}preferSystemUnits/);
     assert.match(src, /fetchAllIngredients\(null\)/, 'must load ingredient catalog for search');
   });
 });

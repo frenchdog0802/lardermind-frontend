@@ -16,6 +16,9 @@ import { SubscriptionView } from './components/SubscriptionView';
 import { MarketingLanding } from './components/MarketingLanding';
 import { clearSetupGuideLocalStorage } from './utils/setupGuide';
 import { useMediaQuery } from './hooks/useMediaQuery';
+import { NotFound } from './components/NotFound';
+import { ForgotPassword, ResetPassword } from './components/PasswordReset';
+import { resolveAppRoute, type AppRoute } from './utils/appRoutes';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 const GUEST_VIEWS = new Set(['landing', 'login', 'signup']);
@@ -29,8 +32,21 @@ const KEEP_ALIVE_VIEWS = [
   'subscription',
 ] as const;
 
+function readResetTokenFromUrl(): string {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get('token')?.trim() ?? '';
+}
+
+function initialViewForRoute(route: AppRoute): string {
+  if (route === 'login') return 'login';
+  if (route === 'signup') return 'signup';
+  return 'aiAssistant';
+}
+
 function AppContent() {
-  const [currentView, setCurrentView] = useState('aiAssistant');
+  const [route, setRoute] = useState<AppRoute>(() => resolveAppRoute(window.location.pathname));
+  const [resetToken] = useState(readResetTokenFromUrl);
+  const [currentView, setCurrentView] = useState(() => initialViewForRoute(route));
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [pendingAiPrompt, setPendingAiPrompt] = useState<string | null>(null);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
@@ -50,6 +66,39 @@ function AppContent() {
   useEffect(() => {
     clearSetupGuideLocalStorage();
   }, []);
+
+  // Browser back/forward between the few real paths.
+  useEffect(() => {
+    const onPopState = () => setRoute(resolveAppRoute(window.location.pathname));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // Do not keep the single-use reset token in the address bar / history.
+  useEffect(() => {
+    if (route === 'reset-password' && window.location.search.includes('token=')) {
+      window.history.replaceState({}, '', '/reset-password');
+    }
+  }, [route]);
+
+  // /pricing deep link: landing page scrolled to the pricing section.
+  useEffect(() => {
+    if (route !== 'pricing' || currentView !== 'landing') return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById('pricing')?.scrollIntoView();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [route, currentView]);
+
+  const goToRoute = (next: AppRoute, path: string, view?: string) => {
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, '', path);
+    }
+    setRoute(next);
+    if (view) setCurrentView(view);
+  };
+  const goToLogin = () => goToRoute('login', '/login', 'login');
+  const goToForgotPassword = () => goToRoute('forgot-password', '/forgot-password');
 
   useEffect(() => {
     if (initializing) return;
@@ -136,10 +185,29 @@ function AppContent() {
     setCurrentView('aiAssistant');
   };
 
+  if (route === 'not-found') {
+    return <NotFound />;
+  }
+  if (route === 'forgot-password') {
+    return <ForgotPassword onBackToLogin={goToLogin} />;
+  }
+  if (route === 'reset-password') {
+    return (
+      <ResetPassword
+        token={resetToken}
+        onBackToLogin={goToLogin}
+        onRequestNewLink={goToForgotPassword}
+      />
+    );
+  }
+
   if (initializing) {
     return <Loading fullScreen />;
   }
-  const isGuestView = GUEST_VIEWS.has(currentView);
+  // Logged-out users never get the app shell: before the routing effect runs,
+  // currentView can still be 'aiAssistant', which would mount AppDrawer and
+  // fire authenticated requests (401s on the landing page).
+  const isGuestView = !isAuthenticated || GUEST_VIEWS.has(currentView);
 
   const showKeepAlive = (view: (typeof KEEP_ALIVE_VIEWS)[number]) =>
     isAuthenticated && visitedViews.has(view);
@@ -170,6 +238,7 @@ function AppContent() {
         <Login
           onLoginSuccess={navigateToAiAssistant}
           onSignUp={navigateToSignUp}
+          onForgotPassword={goToForgotPassword}
         />
       )}
       {showKeepAlive('aiAssistant') && (

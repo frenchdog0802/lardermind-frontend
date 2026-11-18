@@ -219,8 +219,12 @@ export function formatQuantityValue(quantity: number, unit: string, kind: UnitKi
   return formatNumber(quantity);
 }
 
+/**
+ * Format a stored quantity for display. `quantity` is expressed in `opts.baseUnit`
+ * (e.g. 1 with baseUnit 'l' means one litre), not necessarily canonical ml / g.
+ */
 export function formatQuantity(
-  baseQuantity: number,
+  quantity: number,
   opts: {
     kind: UnitKind;
     baseUnit: string;
@@ -228,6 +232,12 @@ export function formatQuantity(
     preferredDisplayUnit?: string | null;
   },
 ): { quantityLabel: string; unit: string; displayQuantity: number } {
+  // Normalise to canonical ml / g first; fromBase() expects canonical input.
+  const sourceUnit = normalizeUnit(opts.baseUnit);
+  const baseQuantity =
+    opts.kind !== 'count' && sourceUnit && kindOf(sourceUnit) === opts.kind
+      ? toBase(quantity, sourceUnit, opts.kind)
+      : quantity;
   const unit = pickDisplayUnit(opts.kind, baseQuantity, opts.system, opts.preferredDisplayUnit);
   const displayQuantity =
     opts.kind === 'count'
@@ -238,6 +248,32 @@ export function formatQuantity(
     unit,
     displayQuantity,
   };
+}
+
+/** Options shown by the unit <select> for a given kind / system. */
+export function unitSelectOptions(
+  kind: UnitKind | null | undefined,
+  system: MeasurementSystem,
+  preferSystemUnits: boolean,
+): string[] {
+  if (!kind) {
+    return preferSystemUnits
+      ? [
+          ...displayUnitsForPreference('weight', system),
+          ...displayUnitsForPreference('volume', system),
+          ...COUNT_UNITS,
+        ]
+      : [...WEIGHT_UNITS, ...VOLUME_UNITS, ...COUNT_UNITS];
+  }
+  if (preferSystemUnits && kind !== 'count') {
+    return displayUnitsForPreference(kind, system);
+  }
+  return allowedUnits(kind);
+}
+
+/** The unit the select actually displays (empty value falls back to the first option). */
+export function resolveSelectedUnit(value: string | null | undefined, options: string[]): string {
+  return value || options[0] || '';
 }
 
 export function parseFractionInput(raw: string): number | null {
