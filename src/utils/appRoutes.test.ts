@@ -40,15 +40,19 @@ describe('Cloudflare Pages routing config', () => {
     assert.ok(!rules.some(([from]) => from === '/*'), 'remove "/* /index.html 200"');
   });
 
-  it('rewrites every SPA deep link to index.html with 200', () => {
+  it('rewrites every SPA deep link to / with 200 (not /index.html)', () => {
     for (const path of SPA_REWRITE_PATHS) {
       assert.ok(
-        rules.some(([from, to, status]) => from === path && to === '/index.html' && status === '200'),
+        rules.some(([from, to, status]) => from === path && to === '/' && status === '200'),
         `missing _redirects rule for ${path}`,
       );
     }
     const routedPaths = rules.map(([from]) => from).sort();
     assert.deepEqual(routedPaths, [...SPA_REWRITE_PATHS].sort(), 'rules and SPA_REWRITE_PATHS must match');
+    assert.ok(
+      rules.every(([, to]) => to === '/' && !to.endsWith('.html')),
+      'rewrite destinations must be /; /index.html is 308-canonicalized to / by Pages Pretty URLs',
+    );
   });
 
   it('build emits 404.html from index.html', () => {

@@ -2,8 +2,9 @@
  * Client routes. The app is view-state driven (no URL router); only these paths are
  * real entry points. Everything else renders the NotFound page.
  *
- * Keep in sync with public/_redirects (rewrites known paths to index.html with 200;
- * unknown paths fall through to 404.html with a real 404 status on Cloudflare Pages).
+ * Keep in sync with public/_redirects (rewrites known paths to / with 200, not
+ * /index.html — Cloudflare Pages Pretty URLs would 308 /index.html to /.
+ * Unknown paths fall through to 404.html with a real 404 on Cloudflare Pages).
  */
 export type AppRoute =
   | 'home'
@@ -25,7 +26,7 @@ const EXACT_ROUTES: Record<string, AppRoute> = {
   '/reset-password': 'reset-password',
 };
 
-/** Paths (besides `/`) that must be rewritten to index.html by the host. */
+/** Paths (besides `/`) that must be rewritten to `/` by the host. */
 export const SPA_REWRITE_PATHS = [
   '/app',
   '/app/*',

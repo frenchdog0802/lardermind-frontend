@@ -29,9 +29,10 @@ Output: `dist/app` (see `vite.config.js` `build.outDir`).
 
 Config: [`wrangler.toml`](./wrangler.toml) (`pages_build_output_dir = "dist/app"`).  
 SPA routing: [`public/_redirects`](./public/_redirects) rewrites only the known client paths
-(`/login`, `/signup`, `/pricing`, `/forgot-password`, `/reset-password`, `/app/*`) to `index.html`
-with 200. The build also emits `404.html` (copy of `index.html`), so any other path returns HTTP 404
-and renders the NotFound page. When adding a client route, update `src/utils/appRoutes.ts` **and**
+(`/login`, `/signup`, `/pricing`, `/forgot-password`, `/reset-password`, `/app/*`) to `/`
+with 200 (not `/index.html`, which Cloudflare Pages Pretty URLs would 308 to `/`). The build
+also emits `404.html` (copy of `index.html`), so any other path returns HTTP 404 and renders
+the NotFound page. When adding a client route, update `src/utils/appRoutes.ts` **and**
 `public/_redirects` (a unit test checks they match).
 
 ### GitHub Actions (this remote)
