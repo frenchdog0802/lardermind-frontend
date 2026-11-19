@@ -1,5 +1,6 @@
 {
   "common": {
+    "language": "語言",
     "loading": "載入中...",
     "save": "儲存變更",
     "saving": "儲存中…",

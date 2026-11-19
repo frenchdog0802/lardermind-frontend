@@ -1,5 +1,6 @@
 {
   "common": {
+    "language": "Language",
     "loading": "Loading...",
     "save": "Save Changes",
     "saving": "Saving…",
