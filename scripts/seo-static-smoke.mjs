@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist', 'app');
 
-const requiredFiles = ['robots.txt', 'sitemap.xml', 'og.jpg', 'index.html'];
+const requiredFiles = ['robots.txt', 'sitemap.xml', 'og-image.png', 'favicon.ico', 'icon-512.png', 'site.webmanifest', 'index.html'];
 const missing = requiredFiles.filter((name) => !existsSync(join(dist, name)));
 if (missing.length) {
   console.error(`seo-static-smoke: missing in dist/app: ${missing.join(', ')}`);
@@ -39,7 +39,7 @@ const headNeedles = [
   'property="og:image"',
   'name="twitter:card"',
   'application/ld+json',
-  'https://lardermind.com/og.jpg',
+  'https://lardermind.com/og-image.png',
 ];
 for (const needle of headNeedles) {
   if (!indexHtml.includes(needle)) {
