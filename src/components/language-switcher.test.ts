@@ -19,6 +19,9 @@ describe('header language switcher', () => {
     const i18n = read('src/i18n/index.ts');
     assert.match(i18n, /native: 'English'/);
     assert.match(i18n, /native: '中文'/);
+    for (const n of ['Español', 'Français', 'Deutsch', '日本語']) {
+      assert.ok(i18n.includes(`native: '${n}'`), n);
+    }
     const sw = read('src/components/LanguageSwitcher.tsx');
     assert.match(sw, /SUPPORTED_LANGUAGES\.map/);
   });
@@ -43,8 +46,8 @@ describe('header language switcher', () => {
     assert.match(read('src/contexts/pantryContext.tsx'), /i18n\.on\('languageChanged'/);
   });
 
-  it('has the common.language string in both locales', () => {
-    for (const f of ['en', 'zh']) {
+  it('has the common.language string in every locale', () => {
+    for (const f of ['en', 'zh', 'es', 'fr', 'de', 'ja']) {
       const j = JSON.parse(read(`src/i18n/locales/${f}.json`));
       assert.ok(j.common.language, `${f} common.language`);
     }

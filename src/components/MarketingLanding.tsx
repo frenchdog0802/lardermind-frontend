@@ -1,5 +1,6 @@
 ﻿import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CameraIcon } from 'lucide-react';
 import { HERO_IMAGE } from '../remotion/heroConstants';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { GuestChatBox } from './GuestChatBox';
@@ -232,6 +233,15 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
         </RevealOnScroll>
 
         <div className="mx-auto flex max-w-5xl flex-col gap-20">
+          <RevealOnScroll>
+            <p
+              data-testid="landing-photo-line"
+              className="mx-auto flex max-w-2xl items-center justify-center gap-3 rounded-2xl border border-line bg-sage/30 px-5 py-4 text-center text-lg font-medium text-ink"
+            >
+              <CameraIcon size={24} className="shrink-0 text-herb" aria-hidden="true" />
+              <span>{t('landing.how.photoLine')}</span>
+            </p>
+          </RevealOnScroll>
           {[
             {
               step: '01',

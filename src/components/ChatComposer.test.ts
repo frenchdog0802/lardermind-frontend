@@ -50,10 +50,10 @@ describe('ChatComposer chrome ownership', () => {
     assert.match(textareaMatch[1], /\bfocus-visible:outline-none\b/);
   });
 
-  it('supports optional onAttach paperclip control', () => {
+  it('supports optional onAttach camera control', () => {
     const src = readChatComposerSource();
     assert.match(src, /onAttach\?:/);
-    assert.match(src, /PaperclipIcon/);
+    assert.match(src, /CameraIcon/);
     assert.match(src, /\{onAttach \?/);
   });
 });

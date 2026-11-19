@@ -6,7 +6,7 @@ import {
   type KeyboardEvent,
   type TextareaHTMLAttributes,
 } from 'react';
-import { PaperclipIcon, SendIcon } from 'lucide-react';
+import { CameraIcon, SendIcon } from 'lucide-react';
 
 export type ChatComposerProps = {
   value: string;
@@ -20,6 +20,10 @@ export type ChatComposerProps = {
   attachDisabled?: boolean;
   attaching?: boolean;
   attachAriaLabel?: string;
+  /** Short hover tooltip for the attach button. */
+  attachTitle?: string;
+  /** Textarea placeholder (e.g. a hint that a photo can be added). */
+  placeholder?: string;
 };
 
 const DEFAULT_MAX_HEIGHT_PX = 240;
@@ -40,7 +44,9 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(
       onAttach,
       attachDisabled = false,
       attaching = false,
-      attachAriaLabel = 'Attach image',
+      attachAriaLabel = 'Add a photo',
+      attachTitle,
+      placeholder,
     },
     ref,
   ) {
@@ -87,6 +93,7 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(
             onClick={onAttach}
             disabled={!canAttach}
             aria-label={attachAriaLabel}
+            title={attachTitle ?? attachAriaLabel}
             aria-busy={attaching}
             className={`absolute left-1.5 bottom-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
               canAttach
@@ -94,12 +101,13 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(
                 : 'text-muted/50'
             }`}
           >
-            <PaperclipIcon size={16} />
+            <CameraIcon size={18} aria-hidden="true" />
           </button>
         ) : null}
         <textarea
           ref={setTextareaRef}
           rows={1}
+          placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
