@@ -49,6 +49,7 @@ function AppContent() {
   const [currentView, setCurrentView] = useState(() => initialViewForRoute(route));
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [pendingAiPrompt, setPendingAiPrompt] = useState<string | null>(null);
+  const [pendingAiAutoSend, setPendingAiAutoSend] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [requestNewChat, setRequestNewChat] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -158,9 +159,10 @@ function AppContent() {
   const navigateToCalendar = () => setCurrentView('calendar');
   const navigateToPantryInventory = () => setCurrentView('pantryInventory');
   const navigateToShoppingList = () => setCurrentView('shoppingList');
-  const navigateToAiAssistant = (prompt?: string) => {
+  const navigateToAiAssistant = (prompt?: string, opts?: { autoSend?: boolean }) => {
     if (typeof prompt === 'string' && prompt.trim()) {
       setPendingAiPrompt(prompt);
+      setPendingAiAutoSend(opts?.autoSend === true);
     }
     setCurrentView('aiAssistant');
   };
@@ -249,6 +251,7 @@ function AppContent() {
           <AICookingAssistant
             isActive={currentView === 'aiAssistant'}
             pendingPrompt={pendingAiPrompt}
+            pendingPromptAutoSend={pendingAiAutoSend}
             onPendingPromptConsumed={() => setPendingAiPrompt(null)}
             requestedSessionId={pendingSessionId}
             requestNewChat={requestNewChat}

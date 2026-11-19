@@ -27,7 +27,7 @@ import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSel
 import { AppHeader } from './AppHeader';
 import { PantryImageReviewModal } from './PantryImageReviewModal';
 import { isAscii } from '../utils/isAscii';
-import { UNDO_TOAST_MS } from '../utils/shoppingListState';
+import { UNDO_TOAST_MS, shoppingBuyCount } from '../utils/shoppingListState';
 import { describeVisionFailure, VISION_ACCEPT } from '../utils/pantryVisionPicker';
 import {
   mergeQuantities,
@@ -53,6 +53,8 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         ingredients,
         fetchAllPantryItems,
         fetchAllIngredients,
+        fetchAllShoppingListItems,
+        shoppingList,
         userSettings,
     } = usePantry();
 
@@ -121,6 +123,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
     useEffect(() => {
         fetchAllPantryItems();
         void fetchAllIngredients(null);
+        void fetchAllShoppingListItems();
     }, []);
 
     // Sync oriPantryItems to local pantryItems
@@ -250,10 +253,8 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         setIsAddingItem(false);
     };
 
-    const needsBuyingCount = useMemo(
-        () => filteredItems.filter(item => (item.item_to_buy || 0) > 0).length,
-        [filteredItems]
-    );
+    // Same source as the Chat home chip: rows still on the shopping list.
+    const needsBuyingCount = useMemo(() => shoppingBuyCount(shoppingList), [shoppingList]);
 
     const closeReviewModal = useCallback(() => {
         setReviewOpen(false);
@@ -325,7 +326,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                 subtitle={
                     <>
                         {filteredItems.length} item{filteredItems.length === 1 ? '' : 's'}
-                        {needsBuyingCount > 0 ? ` · ${needsBuyingCount} to buy` : ''}
+                        {` · ${t('shopping.buyCount', { count: needsBuyingCount })}`}
                     </>
                 }
             />

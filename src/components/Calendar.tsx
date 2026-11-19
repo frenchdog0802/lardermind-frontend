@@ -15,11 +15,16 @@ import { recipeApi } from '../api/recipes';
 import { Loading } from './Loading';
 import { AppHeader } from './AppHeader';
 import { dateLocale } from '../i18n';
+import {
+  planRangeShortages,
+  shortageDeficit,
+  shortagesNotOnList,
+} from '../utils/shortages';
 interface CalendarProps {
   onBack: () => void;
   onOpenMenu?: () => void;
   /** Opens the chat composer prefilled with a prompt (same hook other pages use). */
-  onAskAi?: (prompt: string) => void;
+  onAskAi?: (prompt: string, opts?: { autoSend?: boolean }) => void;
 }
 export function Calendar({
   onBack: _onBack,
@@ -40,6 +45,7 @@ export function Calendar({
     recipesLoading,
     fetchAllShoppingListItems,
     addShoppingListItem,
+    shoppingList,
   } = usePantry();
   const [recipes, setRecipes] = useState<Recipe[]>(contextRecipes);
   const [showRecipeDetailModal, setShowRecipeDetailModal] = useState(false);
@@ -79,6 +85,7 @@ export function Calendar({
   const [notificationShortages, setNotificationShortages] = useState<MealConfirmShortage[] | null>(null);
   const [availabilityByMealId, setAvailabilityByMealId] = useState<Record<string, MealAvailabilityEntry>>({});
   const [weekShortages, setWeekShortages] = useState<MealConfirmShortage[]>([]);
+  const [shortageRange, setShortageRange] = useState<{ from: string; to: string } | null>(null);
   const [addingShopping, setAddingShopping] = useState(false);
   // Get number of days in current month
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -139,7 +146,11 @@ export function Calendar({
     const monthFrom = formatDateString(currentYear, currentMonth, 1);
     const monthTo = formatDateString(currentYear, currentMonth, daysInMonth);
     const from = week.from < monthFrom ? week.from : monthFrom;
-    const to = week.to > monthTo ? week.to : monthTo;
+    // Plans can run past the visible week (and month), so look two weeks ahead.
+    const weekPlus = new Date(currentWeekStart);
+    weekPlus.setDate(currentWeekStart.getDate() + 20);
+    const planTo = formatDateObj(weekPlus);
+    const to = [week.to, monthTo, planTo].sort().pop() as string;
     try {
       const res = await mealPlanApi.availability(from, to);
       if (res.success && res.data) {
@@ -148,44 +159,17 @@ export function Calendar({
           map[entry.meal_plan_id] = entry;
         }
         setAvailabilityByMealId(map);
-        // Week CTA uses shortages only for the visible week meals
-        const weekMealIds = new Set(
-          mealPlans
-            .filter((m) => m.serving_date >= week.from && m.serving_date <= week.to)
-            .map((m) => m.id),
-        );
-        const weekMealShortages = (res.data.meals ?? [])
-          .filter((m) => weekMealIds.has(m.meal_plan_id) && m.status === 'short')
-          .map((m) => m.shortages);
-        const aggregated: MealConfirmShortage[] = [];
-        const keyOf = (s: MealConfirmShortage) =>
-          `${(s.ingredient_id || s.name).toLowerCase()}|${s.unit}`;
-        for (const list of weekMealShortages) {
-          for (const s of list) {
-            const deficit = Math.max(0, s.needed - s.available);
-            if (deficit <= 0) continue;
-            const key = keyOf(s);
-            const existing = aggregated.find((a) => keyOf(a) === key);
-            if (existing) existing.needed += deficit;
-            else {
-              aggregated.push({
-                ...(s.ingredient_id ? { ingredient_id: s.ingredient_id } : {}),
-                name: s.name,
-                needed: deficit,
-                available: 0,
-                unit: s.unit,
-              });
-            }
-          }
-        }
-        setWeekShortages(
-          weekMealIds.size > 0 ? aggregated : (res.data.weekShortages ?? []),
-        );
+        // Banner = plan-range totals (this week and any later planned days, e.g. a
+        // Sunday that falls in the next calendar week), built from the same per-meal
+        // deficits the rows show, so banner, rows and shopping list agree.
+        const range = planRangeShortages(res.data.meals ?? [], week.from);
+        setWeekShortages(range.shortages);
+        setShortageRange(range.from && range.to ? { from: range.from, to: range.to } : null);
       }
     } catch (err) {
       console.error('Failed to load meal availability:', err);
     }
-  }, [getWeekBounds, currentYear, currentMonth, daysInMonth, mealPlans]);
+  }, [getWeekBounds, currentYear, currentMonth, daysInMonth, currentWeekStart]);
 
   useEffect(() => {
     void refreshAvailability();
@@ -275,7 +259,7 @@ export function Calendar({
   const formatShortageSummary = (shortages: MealConfirmShortage[]) => {
     const summary = shortages
       .slice(0, 3)
-      .map((s) => `${s.name} (${s.needed}${s.unit})`)
+      .map((s) => `${s.name} (${shortageDeficit(s)}${s.unit})`)
       .join('; ');
     const extra = shortages.length > 3 ? ` +${shortages.length - 3}` : '';
     return { summary, extra };
@@ -621,20 +605,18 @@ export function Calendar({
       setShowItemActions(itemId);
     }
   };
-  // Expand every day in the current week that has meals (list view default).
+  // Default expansion: today's row when it is in the visible week (local date, not UTC),
+  // otherwise the first day of the week. Runs on every week change.
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    setSelectedDate(new Date());
+    const now = new Date();
+    const today = formatDateObj(now);
+    setSelectedDate(now);
     const weekData = getWeekViewData();
-    const withMeals = Object.entries(weekData)
-      .filter(([, items]) => Array.isArray(items) && items.length > 0)
-      .map(([date]) => date);
-    if (withMeals.length > 0) {
-      setExpandedDateGroups(withMeals);
-    } else if (weekData[today]) {
+    const days = Object.keys(weekData);
+    if (days.includes(today)) {
       setExpandedDateGroups([today]);
-    } else if (Object.keys(weekData).length > 0) {
-      setExpandedDateGroups([Object.keys(weekData)[0]]);
+    } else if (days.length > 0) {
+      setExpandedDateGroups([days[0]]);
     }
   }, [currentWeekStart]);
 
@@ -647,7 +629,7 @@ export function Calendar({
           {onAskAi ? (
             <button
               type="button"
-              onClick={() => onAskAi(t('calendar.planWeekPrompt'))}
+              onClick={() => onAskAi(t('calendar.planWeekPrompt'), { autoSend: true })}
               className="h-10 px-3 inline-flex items-center rounded-full text-sm font-medium text-herb-deep bg-sage/50 hover:bg-sage transition-colors"
             >
               {t('calendar.planWeek')}
@@ -818,18 +800,27 @@ export function Calendar({
                 <p className="text-xs text-muted min-w-0 flex-1">
                   {(() => {
                     const { summary, extra } = formatShortageSummary(weekShortages);
-                    return t('calendar.missingSummary', { summary, extra });
+                    if (!shortageRange) return t('calendar.missingSummary', { summary, extra });
+                    const range = t('calendar.planRange', {
+                      from: formatDisplayDate(shortageRange.from),
+                      to: formatDisplayDate(shortageRange.to),
+                    });
+                    return t('calendar.missingSummaryRange', { range, summary, extra });
                   })()}
                 </p>
-                <button
-                  type="button"
-                  disabled={addingShopping}
-                  onClick={() => void addShortagesToShopping(weekShortages)}
-                  className="flex items-center gap-1.5 text-sm font-medium text-white bg-herb hover:bg-herb active:bg-herb-deep px-3 py-1.5 rounded-xl disabled:opacity-60"
-                >
-                  <ShoppingCartIcon size={14} />
-                  {t('calendar.addAllMissing')}
-                </button>
+                {shortagesNotOnList(weekShortages, shoppingList).length > 0 ? (
+                  <button
+                    type="button"
+                    disabled={addingShopping}
+                    onClick={() => void addShortagesToShopping(shortagesNotOnList(weekShortages, shoppingList))}
+                    className="flex items-center gap-1.5 text-sm font-medium text-white bg-herb hover:bg-herb active:bg-herb-deep px-3 py-1.5 rounded-xl disabled:opacity-60"
+                  >
+                    <ShoppingCartIcon size={14} />
+                    {t('calendar.addAllMissing')}
+                  </button>
+                ) : (
+                  <span className="text-xs font-medium text-herb">{t('calendar.alreadyOnList')}</span>
+                )}
               </div>
             )}
             {/* Week View */}
@@ -899,18 +890,20 @@ export function Calendar({
                                         return t('calendar.missingSummary', { summary, extra });
                                       })()}
                                     </p>
-                                    <button
-                                      type="button"
-                                      disabled={addingShopping}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void addShortagesToShopping(avail.shortages);
-                                      }}
-                                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-herb hover:text-herb-deep"
-                                    >
-                                      <ShoppingCartIcon size={12} />
-                                      {t('calendar.addMissingToShopping')}
-                                    </button>
+                                    {shortagesNotOnList(avail.shortages, shoppingList).length > 0 && (
+                                      <button
+                                        type="button"
+                                        disabled={addingShopping}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          void addShortagesToShopping(shortagesNotOnList(avail.shortages, shoppingList));
+                                        }}
+                                        className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-herb hover:text-herb-deep"
+                                      >
+                                        <ShoppingCartIcon size={12} />
+                                        {t('calendar.addMissingToShopping')}
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -1024,13 +1017,13 @@ export function Calendar({
                                   {item.status === 'SKIPPED' && t('calendar.statusDidntCook')}
                                 </p>
                               )}
-                              {avail?.status === 'short' && avail.shortages.length > 0 && (
+                              {avail?.status === 'short' && shortagesNotOnList(avail.shortages, shoppingList).length > 0 && (
                                 <button
                                   type="button"
                                   disabled={addingShopping}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    void addShortagesToShopping(avail.shortages);
+                                    void addShortagesToShopping(shortagesNotOnList(avail.shortages, shoppingList));
                                   }}
                                   className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-herb"
                                 >

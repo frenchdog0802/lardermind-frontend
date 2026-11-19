@@ -12,6 +12,7 @@ import {
     INFO_TOAST_MS,
     UNDO_TOAST_MS,
     isOnShoppingList,
+    shoppingBuyCount,
     shoppingEmptyState,
 } from '../utils/shoppingListState';
 import type { MeasurementSystem } from '../utils/units';
@@ -21,15 +22,6 @@ interface ShoppingListProps {
     onOpenMenu?: () => void;
     onAskAi?: (prompt: string) => void;
 }
-
-type ReviewDraft = {
-    id: string;
-    name: string;
-    quantity: number;
-    unit: string;
-    selected: boolean;
-    hasIngredient: boolean;
-};
 
 export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingListProps) {
     const { t } = useTranslation();
@@ -63,9 +55,6 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
     const [isAddingShoppingItem, setIsAddingShoppingItem] = useState(false);
     const [isCompletingAll, setIsCompletingAll] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
-    const [showReview, setShowReview] = useState(false);
-    const [reviewDrafts, setReviewDrafts] = useState<ReviewDraft[]>([]);
-    const [isSyncing, setIsSyncing] = useState(false);
     const [uncheckConfirmItem, setUncheckConfirmItem] = useState<ShoppingListItem | null>(null);
 
     const { filteredIngredients: filteredShoppingIngredients, loading: shoppingLoading } = useSearchIngredients(
@@ -121,10 +110,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         [shoppingList],
     );
 
-    const pendingSyncItems = useMemo(
-        () => shoppingList.filter(item => item.checked && !item.synced_to_pantry),
-        [shoppingList],
-    );
+    const buyCount = useMemo(() => shoppingBuyCount(shoppingList), [shoppingList]);
 
     const showToast = (text: string, idsForUndo?: string[]) => {
         if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -289,44 +275,6 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         }
     };
 
-    const openReviewSheet = () => {
-        const drafts: ReviewDraft[] = pendingSyncItems.map(item => ({
-            id: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            unit: item.unit,
-            selected: Boolean(item.ingredient_id),
-            hasIngredient: Boolean(item.ingredient_id),
-        }));
-        setReviewDrafts(drafts);
-        setShowReview(true);
-    };
-
-    const handleConfirmSync = async () => {
-        const selected = reviewDrafts.filter(d => d.selected);
-        if (selected.length === 0) {
-            showToast(t('shopping.syncEmpty'));
-            return;
-        }
-        setIsSyncing(true);
-        try {
-            const res = await syncShoppingItemsToPantry(
-                selected.map(d => ({
-                    id: d.id,
-                    quantity: d.quantity,
-                    unit: d.unit,
-                })),
-            );
-            if (res.success && res.data) {
-                const ids = res.data.synced.map(i => i.id);
-                setShowReview(false);
-                showToast(t('shopping.syncSuccess', { count: ids.length }), ids);
-            }
-        } finally {
-            setIsSyncing(false);
-        }
-    };
-
     const emptyState = shoppingEmptyState({
         visibleCount: filteredShoppingItems.length,
         onListCount,
@@ -357,24 +305,13 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
 
     return (
         <div className="flex flex-col w-full min-h-screen bg-linen">
-            <AppHeader title={t('shopping.title')} onOpenMenu={onOpenMenu} />
+            <AppHeader
+                title={t('shopping.title')}
+                onOpenMenu={onOpenMenu}
+                subtitle={t('shopping.buyCount', { count: buyCount })}
+            />
             <div className="flex-1 overflow-y-auto">
                 <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 py-6">
-                    {showMessage && (
-                        <div className="mb-4 p-3 bg-sage/50 border border-line rounded-xl text-herb-deep text-sm font-medium animate-fade-in flex items-center justify-between gap-3">
-                            <span>{message}</span>
-                            {undoIds && (
-                                <button
-                                    type="button"
-                                    onClick={() => void handleUndoSync()}
-                                    className="shrink-0 underline font-semibold"
-                                >
-                                    {t('shopping.undo')}
-                                </button>
-                            )}
-                        </div>
-                    )}
-
                     <div className="relative mb-6">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <SearchIcon size={18} className="text-muted" />
@@ -518,16 +455,6 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                         </div>
                     )}
 
-                    {pendingSyncItems.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={openReviewSheet}
-                            className="w-full mb-4 flex items-center justify-center gap-2 bg-herb text-white font-medium py-3 px-4 rounded-xl shadow-sm hover:bg-herb-deep transition-colors"
-                        >
-                            {t('shopping.syncToPantry', { count: pendingSyncItems.length })}
-                        </button>
-                    )}
-
                     <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
                         <div className="p-4 border-b border-line bg-linen flex items-center justify-between gap-3">
                             <h2 className="font-semibold text-ink">{t('shopping.itemsToBuy')}</h2>
@@ -591,17 +518,6 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                                                     measurementSystem={measurementSystem}
                                                 />
                                             </div>
-                                            {item.checked && (
-                                                <span className={`text-xs shrink-0 px-2 py-0.5 rounded-full ${
-                                                    item.synced_to_pantry
-                                                        ? 'bg-sage/60 text-herb-deep'
-                                                        : 'bg-amber-100 text-amber-800'
-                                                }`}>
-                                                    {item.synced_to_pantry
-                                                        ? t('shopping.syncedToPantry')
-                                                        : t('shopping.pendingSync')}
-                                                </span>
-                                            )}
                                             <button
                                                 onClick={() => void handleRemoveShoppingItem(item.id)}
                                                 className="p-1.5 flex-shrink-0 rounded-full hover:bg-sage/50 text-muted hover:text-herb transition-colors"
@@ -618,79 +534,23 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                 </main>
             </div>
 
-            {showReview && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
-                    <div className="bg-surface w-full max-w-lg rounded-2xl shadow-xl border border-line max-h-[85vh] flex flex-col">
-                        <div className="p-4 border-b border-line">
-                            <h3 className="font-semibold text-ink text-lg">{t('shopping.syncReviewTitle')}</h3>
-                            {reviewDrafts.some(d => !d.hasIngredient) && (
-                                <p className="text-sm text-muted mt-1">{t('shopping.syncNonFoodHint')}</p>
-                            )}
-                        </div>
-                        <ul className="overflow-y-auto flex-1 divide-y divide-line">
-                            {reviewDrafts.map((draft, idx) => (
-                                <li key={draft.id} className="p-4 flex items-start gap-3">
-                                    <input
-                                        type="checkbox"
-                                        checked={draft.selected}
-                                        onChange={e => {
-                                            const selected = e.target.checked;
-                                            setReviewDrafts(prev =>
-                                                prev.map((d, i) => (i === idx ? { ...d, selected } : d))
-                                            );
-                                        }}
-                                        className="mt-1"
-                                    />
-                                    <div className="flex-1 min-w-0 space-y-2">
-                                        <div className="font-medium text-ink capitalize">{draft.name}</div>
-                                        <div className="flex gap-2">
-                                            <NumberInput
-                                                min={0.1}
-                                                step={0.5}
-                                                value={draft.quantity}
-                                                onChange={value =>
-                                                    setReviewDrafts(prev =>
-                                                        prev.map((d, i) => (i === idx ? { ...d, quantity: value } : d))
-                                                    )
-                                                }
-                                                className="w-1/3 p-2 rounded-lg"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={draft.unit}
-                                                onChange={e => {
-                                                    const unit = e.target.value;
-                                                    setReviewDrafts(prev =>
-                                                        prev.map((d, i) => (i === idx ? { ...d, unit } : d))
-                                                    );
-                                                }}
-                                                className="w-2/3 p-2 border border-line rounded-lg"
-                                                aria-label={t('shopping.unit')}
-                                            />
-                                        </div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                        <div className="p-4 border-t border-line flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowReview(false)}
-                                className="flex-1 py-2.5 rounded-xl bg-sage/40 text-ink font-medium"
-                                disabled={isSyncing}
-                            >
-                                {t('shopping.syncCancel')}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void handleConfirmSync()}
-                                className="flex-1 py-2.5 rounded-xl bg-herb text-white font-medium disabled:opacity-50"
-                                disabled={isSyncing || reviewDrafts.every(d => !d.selected)}
-                            >
-                                {t('shopping.syncConfirm')}
-                            </button>
-                        </div>
-                    </div>
+            {showMessage && (
+                <div
+                    role="status"
+                    aria-live="polite"
+                    data-testid="shopping-toast"
+                    className="fixed bottom-6 left-1/2 z-[80] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 p-3 bg-herb-deep text-white border border-line rounded-xl text-sm font-medium shadow-lg flex items-center justify-between gap-3"
+                >
+                    <span>{message}</span>
+                    {undoIds && (
+                        <button
+                            type="button"
+                            onClick={() => void handleUndoSync()}
+                            className="shrink-0 underline font-semibold px-2 py-1"
+                        >
+                            {t('shopping.undo')}
+                        </button>
+                    )}
                 </div>
             )}
 

@@ -30,12 +30,15 @@ import {
 } from '../utils/chatBootstrapGate';
 import { isQuotaExceededMessage } from '../utils/quotaExceeded';
 import { parseTypedApprovalReply } from '../utils/approvalReply';
+import { approvalToolTitleKey, isRecipeScheduledOn, localYmd } from '../utils/approvalTitle';
 import { needsFallbackApprovalCard, settleStaleInterrupts } from '../utils/interruptMessages';
 interface AICookingAssistantProps {
   /** When false, the view is hidden but stays mounted so streams keep running. */
   isActive?: boolean;
   /** Prefill the composer when navigating from an empty-state CTA. */
   pendingPrompt?: string | null;
+  /** Send pendingPrompt right away instead of only prefilling the composer. */
+  pendingPromptAutoSend?: boolean;
   onPendingPromptConsumed?: () => void;
   /** Switch to this session when set from the app drawer. */
   requestedSessionId?: string | null;
@@ -72,6 +75,7 @@ interface ResponseCardData {
   recipeId?: string;
   recipeName?: string;
   ingredientCount?: number;
+  ingredients?: Array<{ name: string; quantity?: string | number; unit?: string }>;
   steps?: string[];
   sourceUrl?: string;
   imported?: boolean;
@@ -149,6 +153,7 @@ function normalizeRecipeCardData(cardData?: ResponseCardData): ResponseCardData 
 export function AICookingAssistant({
   isActive = true,
   pendingPrompt = null,
+  pendingPromptAutoSend = false,
   onPendingPromptConsumed,
   requestedSessionId = null,
   requestNewChat = false,
@@ -167,6 +172,7 @@ export function AICookingAssistant({
     fetchAllShoppingListItems,
     fetchAllPantryItems,
     fetchAllMealPlans,
+    mealPlan: contextMealPlans,
   } = usePantry();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -184,6 +190,7 @@ export function AICookingAssistant({
   } | null>(null);
   const [resumeInFlight, setResumeInFlight] = useState(false);
   const resumeLock = useRef(false);
+  const sendPromptRef = useRef<(text: string) => void>(() => undefined);
   const [recognizing, setRecognizing] = useState(false);
   const [recognizeError, setRecognizeError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -352,10 +359,16 @@ export function AICookingAssistant({
   // Prefill composer from empty-state / Home CTAs
   useEffect(() => {
     if (!isActive || !pendingPrompt) return;
-    setInputValue(pendingPrompt);
+    // "Plan my week" sends right away; other CTAs only prefill. Fall back to a
+    // prefill when a turn is already running or an approval is pending.
+    if (pendingPromptAutoSend && !isTyping && !resumeInFlight && !pendingApproval) {
+      sendPromptRef.current(pendingPrompt);
+    } else {
+      setInputValue(pendingPrompt);
+    }
     onPendingPromptConsumed?.();
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, [isActive, pendingPrompt, onPendingPromptConsumed]);
+  }, [isActive, pendingPrompt, pendingPromptAutoSend, onPendingPromptConsumed]);
 
   // Drawer Recents / New chat
   useEffect(() => {
@@ -414,7 +427,7 @@ export function AICookingAssistant({
   const handleAddCreatedRecipeToMenu = async (recipeId: string) => {
     setAddingToMenuRecipeId(recipeId);
     try {
-      const servingDate = new Date().toISOString().slice(0, 10);
+      const servingDate = localYmd();
       const response = await mealPlanApi.create({
         recipe_id: recipeId,
         meal_type: 'dinner',
@@ -469,6 +482,8 @@ export function AICookingAssistant({
   const renderRecipeCard = (message: Message, label = 'Recipe') => {
     const card = normalizeRecipeCardData(message.cardData);
     const steps = card.steps ?? [];
+    const cardIngredients = card.ingredients ?? [];
+    const scheduledToday = isRecipeScheduledOn(contextMealPlans ?? [], card.recipeId, localYmd());
     return (
       <div className="mt-3 bg-surface border border-line rounded-xl p-4">
         <h3 className="font-medium text-ink">{label}: {card.recipeName}</h3>
@@ -477,6 +492,20 @@ export function AICookingAssistant({
         </p>
         {card.sourceUrl && (
           <p className="text-xs text-muted mt-1 truncate">From: {card.sourceUrl}</p>
+        )}
+        {cardIngredients.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-medium text-ink">{t('ai.recipeIngredients')}</p>
+            <ul className="mt-1 text-sm text-muted list-disc pl-5 space-y-0.5">
+              {cardIngredients.map((ing, index) => (
+                <li key={`${ing.name}-${index}`}>
+                  {ing.name}
+                  {ing.quantity !== undefined && ing.quantity !== '' ? ` ${ing.quantity}` : ''}
+                  {ing.unit ? ` ${ing.unit}` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {steps.length > 0 && (
           <ol className="mt-3 space-y-2 max-h-48 overflow-y-auto">
@@ -497,13 +526,15 @@ export function AICookingAssistant({
           >
             Edit Recipe
           </button>
-              <button
-                onClick={() => card.recipeId && handleAddCreatedRecipeToMenu(card.recipeId)}
-                disabled={addingToMenuRecipeId === card.recipeId}
-                className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-60"
-              >
-            Add to today's dinner
-          </button>
+          {!scheduledToday && (
+            <button
+              onClick={() => card.recipeId && handleAddCreatedRecipeToMenu(card.recipeId)}
+              disabled={addingToMenuRecipeId === card.recipeId}
+              className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-60"
+            >
+              Add to today's dinner
+            </button>
+          )}
         </div>
       </div>
     );
@@ -517,7 +548,7 @@ export function AICookingAssistant({
         <ul className="mt-2 space-y-1 text-xs text-muted">
           {pendingApproval.pendingTools.map((tool, index) => (
             <li key={`${tool.name}-${index}`}>
-              <span className="font-medium text-ink">{tool.name}</span>
+              <span className="font-medium text-ink">{t(approvalToolTitleKey(tool.name))}</span>
               {tool.argsSummary ? ` — ${tool.argsSummary}` : ''}
             </li>
           ))}
@@ -853,6 +884,17 @@ export function AICookingAssistant({
     } catch (error) {
       console.error('Failed to create chat session', error);
     }
+  };
+  // Always points at the latest closure so effects can send a prompt directly.
+  sendPromptRef.current = (text: string) => {
+    const clean = text.trim();
+    if (!clean) return;
+    setMessages(prev => [
+      ...prev,
+      { id: `user-${Date.now()}`, role: 'user', content: clean, timestamp: Date.now() },
+    ]);
+    setInputValue('');
+    generateResponse(clean);
   };
   // Handle sending a message
   const handleSendMessage = () => {
