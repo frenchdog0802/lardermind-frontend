@@ -29,6 +29,7 @@ import {
   resolveChatHeaderIsNewChat,
 } from '../utils/chatBootstrapGate';
 import { isQuotaExceededMessage } from '../utils/quotaExceeded';
+import { parseTypedApprovalReply } from '../utils/approvalReply';
 interface AICookingAssistantProps {
   /** When false, the view is hidden but stays mounted so streams keep running. */
   isActive?: boolean;
@@ -807,7 +808,29 @@ export function AICookingAssistant({
   };
   // Handle sending a message
   const handleSendMessage = () => {
-    if (!inputValue.trim() || isTyping || pendingApproval) return;
+    const text = inputValue.trim();
+    if (!text || isTyping || resumeInFlight) return;
+    // While an action is pending, typed text never starts a new turn and never
+    // hides the card: yes/no resolves it, anything else just gets a reminder.
+    if (pendingApproval) {
+      const typed = parseTypedApprovalReply(text);
+      setMessages(prevMessages => [
+        ...prevMessages,
+        {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: inputValue,
+          timestamp: Date.now()
+        },
+      ]);
+      setInputValue('');
+      if (typed) {
+        void handleResume(typed);
+      } else {
+        pushAssistantNote(t('ai.approvalPendingReminder'));
+      }
+      return;
+    }
     // Add user message
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -849,6 +872,10 @@ export function AICookingAssistant({
     setMessages(prevMessages => [...prevMessages, confirmationMessage]);
   };
   const isEmptyStage = !selectedRecipe && chatBodyMode === 'empty';
+  // Only the newest interrupt row shows the card (a re-shown card must not duplicate).
+  const lastInterruptMessageId = [...messages]
+    .reverse()
+    .find((m) => m.type === 'interrupt')?.id;
 
   const closeReviewModal = useCallback(() => {
     setReviewOpen(false);
@@ -919,7 +946,7 @@ export function AICookingAssistant({
         value={inputValue}
         onChange={setInputValue}
         onSend={handleSendMessage}
-        disabled={isTyping || Boolean(pendingApproval) || recognizing || resumeInFlight}
+        disabled={isTyping || recognizing || resumeInFlight}
         ariaLabel={t('ai.title')}
         onAttach={handleAttachPantryImage}
         attachDisabled={Boolean(pendingApproval)}
@@ -1087,7 +1114,7 @@ export function AICookingAssistant({
                         </>
                       )}
                     </div>
-                    {message.type === 'interrupt' && pendingApproval && renderPendingApprovalCard()}
+                    {message.type === 'interrupt' && pendingApproval && message.id === lastInterruptMessageId && renderPendingApprovalCard()}
                     {message.type === 'recipe_created' && message.cardData && renderRecipeCard(message)}
                     {message.type === 'recipe_imported' && message.cardData && renderRecipeCard(message, 'Imported recipe')}
                     {message.type === 'recipe_updated' && message.cardData && (
