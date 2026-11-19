@@ -213,7 +213,7 @@
     "missingSummaryRange": "Need for {{range}}: {{summary}}{{extra}}",
     "addAllMissingRange": "Add all missing to shopping list",
     "alreadyOnList": "Missing items are already on your shopping list",
-    "planRange": "{{from}} - {{to}}"
+    "planRange": "{{from}} – {{to}}"
   },
   "pantry": {
     "title": "Kitchen Inventory",

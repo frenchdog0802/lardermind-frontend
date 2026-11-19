@@ -66,6 +66,8 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         quantity: 1,
         unit: '',
     });
+    // Once the user picks a unit, catalog defaults must never overwrite it.
+    const unitTouchedRef = useRef(false);
     const [showDropdown, setShowDropdown] = useState(false);
     const [isAddingItem, setIsAddingItem] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -95,7 +97,9 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                 setNewItem(prev => ({
                     ...prev,
                     name: match.name,
-                    unit: preferredUnitForIngredient(match, measurementSystem).unit,
+                    unit: unitTouchedRef.current
+                        ? prev.unit
+                        : preferredUnitForIngredient(match, measurementSystem).unit,
                 }));
                 setShowDropdown(false);
                 setSelectedIndex(-1);
@@ -133,11 +137,13 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
 
     // ?????????????????
     const handleSelectIngredient = (ingredient: IngredientEntry) => {
-        setNewItem({
+        setNewItem(prev => ({
             name: ingredient.name,
             quantity: 1,
-            unit: preferredUnitForIngredient(ingredient, measurementSystem).unit,
-        });
+            unit: unitTouchedRef.current
+                ? prev.unit
+                : preferredUnitForIngredient(ingredient, measurementSystem).unit,
+        }));
         setShowDropdown(false);
         setSelectedIndex(-1);
     };
@@ -188,19 +194,13 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         }
     };
 
-    const addFormUnitKind = preferredUnitForIngredient(
-        ingredients.find(i => i.name.toLowerCase() === newItem.name.toLowerCase()) || {
-            default_unit: newItem.unit,
-        },
-        measurementSystem
-    ).kind;
-
     const handleAddItem = () => {
         if (!newItem.name.trim()) return;
-        // Save exactly the unit the select shows (untouched form shows options[0], e.g. 'g').
+        // Save exactly the unit the select shows. The select offers every app unit,
+        // so a chosen unit (g, kg, ml...) is never coerced to the catalog's count unit.
         const displayedUnit = resolveSelectedUnit(
             newItem.unit,
-            unitSelectOptions(addFormUnitKind, measurementSystem, true),
+            unitSelectOptions(undefined, measurementSystem, false),
         );
         // Check if item already exists
         const existingItem = pantryItems.find(item => item.name.toLowerCase() === newItem.name.toLowerCase());
@@ -234,6 +234,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
             addPantryItem({ ...newItem, unit: displayedUnit });
         }
         // Reset form
+        unitTouchedRef.current = false;
         setNewItem({
             name: '',
             quantity: 1,
@@ -243,6 +244,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
     };
 
     const handleCancelAddItem = () => {
+        unitTouchedRef.current = false;
         setNewItem({
             name: '',
             quantity: 1,
@@ -534,11 +536,12 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                                         className="w-1/3 p-2 rounded-lg"
                                     />
                                     <UnitSelect
-                                        kind={addFormUnitKind}
                                         value={newItem.unit}
-                                        onChange={unit => setNewItem({ ...newItem, unit })}
+                                        onChange={unit => {
+                                            unitTouchedRef.current = true;
+                                            setNewItem({ ...newItem, unit });
+                                        }}
                                         measurementSystem={measurementSystem}
-                                        preferSystemUnits
                                         className="w-2/3 p-2 border border-line rounded-lg bg-surface"
                                     />
                                 </div>

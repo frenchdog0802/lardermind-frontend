@@ -16,6 +16,13 @@ import { Loading } from './Loading';
 import { AppHeader } from './AppHeader';
 import { dateLocale } from '../i18n';
 import {
+  defaultExpandedDay,
+  parseLocalDate,
+  relativeDayKey,
+  shortageRangeLabel,
+  startOfWeekLocal,
+} from '../utils/calendarDates';
+import {
   planRangeShortages,
   shortageDeficit,
   shortagesNotOnList,
@@ -74,7 +81,10 @@ export function Calendar({
     startDate.setHours(0, 0, 0, 0); // Start of day
     return startDate;
   });
-  const [expandedDateGroups, setExpandedDateGroups] = useState<string[]>([]);
+  // Start with today's local row expanded (first view), not [] + a later effect.
+  const [expandedDateGroups, setExpandedDateGroups] = useState<string[]>(() => [
+    defaultExpandedDay(startOfWeekLocal(new Date())),
+  ]);
   const [showItemActions, setShowItemActions] = useState<string | null>(null);
   // Get current month and year
   const currentMonth = currentDate.getMonth();
@@ -441,7 +451,7 @@ export function Calendar({
     const recipe = recipes.find(r => r.id === selectedRecipeId);
     if (!recipe) return;
     // Format the date string
-    const dateString = selectedDate ? formatDateString(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()) : new Date().toISOString().split('T')[0];
+    const dateString = selectedDate ? formatDateString(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()) : formatDateObj(new Date());
     // Create a recipe object for the cooking history
     let meal_name = '';
     if (recipe) {
@@ -523,21 +533,9 @@ export function Calendar({
   };
   // Format date for display
   const formatDisplayDate = (dateString: string) => {
-    const [year, month, day] = dateString.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    // Check if date is today, yesterday, or tomorrow
-    if (date.toDateString() === today.toDateString()) {
-      return t('common.today');
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return t('common.yesterday');
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return t('common.tomorrow');
-    }
+    const date = parseLocalDate(dateString);
+    const rel = relativeDayKey(dateString);
+    if (rel) return t(`common.${rel}`);
     // Otherwise return formatted date
     return date.toLocaleDateString(dateLocale(i18n.language), {
       weekday: 'short',
@@ -609,15 +607,8 @@ export function Calendar({
   // otherwise the first day of the week. Runs on every week change.
   useEffect(() => {
     const now = new Date();
-    const today = formatDateObj(now);
     setSelectedDate(now);
-    const weekData = getWeekViewData();
-    const days = Object.keys(weekData);
-    if (days.includes(today)) {
-      setExpandedDateGroups([today]);
-    } else if (days.length > 0) {
-      setExpandedDateGroups([days[0]]);
-    }
+    setExpandedDateGroups([defaultExpandedDay(currentWeekStart, now)]);
   }, [currentWeekStart]);
 
   return <div className="flex flex-col w-full min-h-screen bg-linen">
@@ -801,9 +792,15 @@ export function Calendar({
                   {(() => {
                     const { summary, extra } = formatShortageSummary(weekShortages);
                     if (!shortageRange) return t('calendar.missingSummary', { summary, extra });
-                    const range = t('calendar.planRange', {
-                      from: formatDisplayDate(shortageRange.from),
-                      to: formatDisplayDate(shortageRange.to),
+                    const range = shortageRangeLabel(shortageRange.from, shortageRange.to, {
+                      relative: key => t(`common.${key}`),
+                      short: (d, withWeekday) =>
+                        d.toLocaleDateString(dateLocale(i18n.language), {
+                          ...(withWeekday ? { weekday: 'short' as const } : {}),
+                          month: 'short',
+                          day: 'numeric',
+                        }),
+                      range: (from, to) => t('calendar.planRange', { from, to }),
                     });
                     return t('calendar.missingSummaryRange', { range, summary, extra });
                   })()}
@@ -825,7 +822,7 @@ export function Calendar({
             )}
             {/* Week View */}
             <div className="space-y-2">
-              {Object.entries(getWeekViewData()).sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime()).map(([date, items]) => {
+              {Object.entries(getWeekViewData()).sort(([dateA], [dateB]) => parseLocalDate(dateA).getTime() - parseLocalDate(dateB).getTime()).map(([date, items]) => {
                 const isExpanded = expandedDateGroups.includes(date);
                 const hasItems = Array.isArray(items) && items.length > 0;
                 return <div key={date} className="border border-line rounded-xl overflow-hidden bg-surface">

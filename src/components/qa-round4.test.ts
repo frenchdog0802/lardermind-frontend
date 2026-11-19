@@ -64,7 +64,7 @@ describe('calendar and chat wiring', () => {
   it('Plan my week auto-sends; today row expands by local date', () => {
     const cal = read('src/components/Calendar.tsx');
     assert.match(cal, /onAskAi\(t\('calendar\.planWeekPrompt'\), \{ autoSend: true \}\)/);
-    assert.match(cal, /const today = formatDateObj\(now\);/);
+    assert.match(cal, /defaultExpandedDay\(currentWeekStart, now\)/);
     assert.match(read('src/App.tsx'), /pendingPromptAutoSend=\{pendingAiAutoSend\}/);
   });
 

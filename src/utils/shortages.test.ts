@@ -68,3 +68,28 @@ describe('shortage totals agree across meal rows, banner and shopping list', () 
     );
   });
 });
+
+describe('Need, banner and shopping list agree on salt 18 g (round 5)', () => {
+  const salt = { name: 'Salt', needed: 18, available: 0, unit: 'g' };
+  const meals = [{ serving_date: '2026-11-20', status: 'short', shortages: [salt] }];
+
+  it('banner totals carry the same salt 18 g the meal row shows', () => {
+    const r = planRangeShortages(meals, '2026-11-15');
+    assert.equal(shortageLabel(meals[0]!.shortages[0]!), 'Salt 18 g');
+    assert.equal(r.shortages.length, 1);
+    assert.equal(shortageLabel(r.shortages[0]!), 'Salt 18 g');
+  });
+
+  it('is offered for the list while missing, and covered once on the list (case/plural/unit-insensitive)', () => {
+    assert.equal(shortagesNotOnList([salt], []).length, 1);
+    assert.equal(shortagesNotOnList([salt], [{ name: 'salt', quantity: 18, unit: 'g' }]).length, 0);
+    assert.equal(shortagesNotOnList([salt], [{ name: 'Salt', quantity: 0.02, unit: 'kg' }]).length, 0);
+    assert.equal(shortagesNotOnList([salt], [{ name: 'Salt', quantity: 10, unit: 'g' }]).length, 1);
+    assert.equal(shortagesNotOnList([salt], [{ name: 'Salt', quantity: 18, unit: 'g', checked: true }]).length, 1);
+  });
+
+  it('cooked and raw staples share one list entry', () => {
+    const cooked = { name: 'cooked rice', needed: 600, available: 0, unit: 'g' };
+    assert.equal(shortagesNotOnList([cooked], [{ name: 'Rice', quantity: 600, unit: 'g' }]).length, 0);
+  });
+});
