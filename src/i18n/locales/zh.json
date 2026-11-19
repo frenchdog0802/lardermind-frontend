@@ -209,7 +209,11 @@
     "addAllMissing": "將本週缺少的全部加入購物清單",
     "addedToShopping": "已加入 {{count}} 項到購物清單",
     "nothingToAdd": "沒有新項目可加 — 購物清單已有",
-    "missingSummary": "還缺：{{summary}}{{extra}}"
+    "missingSummary": "還缺：{{summary}}{{extra}}",
+    "missingSummaryRange": "{{range}} 需要：{{summary}}{{extra}}",
+    "addAllMissingRange": "將缺少的全部加入購物清單",
+    "alreadyOnList": "缺少的食材已在購物清單中",
+    "planRange": "{{from}} - {{to}}"
   },
   "pantry": {
     "title": "廚房庫存",
@@ -256,6 +260,7 @@
     "addItem": "新增購物項目",
     "addItemTitle": "加入購物清單",
     "itemNamePlaceholder": "搜尋或輸入品名",
+    "buyCount": "待購 {{count}} 項",
     "itemsToBuy": "待購項目",
     "empty": "購物清單是空的",
     "updating": "正在更新清單…",
@@ -402,7 +407,22 @@
       "我現有的食材可以煮什麼？": "你冰箱裡有雞胸肉、米、花椰菜和醬油。要不要做 **蒜香醬油雞胸配花椰菜**？大約 25 分鐘 — 購物清單我只幫你加了蒜頭。",
       "幫我規劃這週剩下的晚餐": "這是你的計畫 — 已避開辣的（Alex 的偏好），並優先用快過期的菠菜：\n\n• 一：檸檬香草雞配飯\n• 二：菠菜千層麵\n• 三：豆腐蔬菜炒\n• 四：慢燉辣椒\n• 五：魚肉塔可（適合小孩）\n\n已加入 6 項到購物清單。",
       "把雞胸肉、米和花椰菜加入冰箱": "完成 — 已更新冰箱：\n\n• +2 磅雞胸肉\n• +1 包米\n• +1 顆花椰菜\n\n下次規劃菜單時會優先用這些。"
-    }
+    },
+    "approvalTool": {
+      "addPantryItems": "加入庫存",
+      "updatePantryItems": "更新庫存",
+      "removePantryItems": "從庫存移除",
+      "addItemsToShoppingList": "加入購物清單",
+      "addMealPlanShortagesToShoppingList": "將缺少的食材加入購物清單",
+      "createRecipe": "儲存食譜",
+      "updateRecipe": "更新食譜",
+      "addRecipeToMenu": "排入菜單",
+      "planMeals": "排入多餐",
+      "updatePreferences": "更新偏好設定",
+      "generic": "套用變更"
+    },
+    "recipeIngredients": "食材",
+    "recipeAlreadyToday": "已排入今天晚餐"
   },
   "setupGuide": {
     "title": "設定指南",

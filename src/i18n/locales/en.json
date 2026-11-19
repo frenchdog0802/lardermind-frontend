@@ -209,7 +209,11 @@
     "addAllMissing": "Add all missing to shopping",
     "addedToShopping": "Added {{count}} item(s) to shopping list",
     "nothingToAdd": "Nothing new to add — already on your shopping list",
-    "missingSummary": "Need: {{summary}}{{extra}}"
+    "missingSummary": "Need: {{summary}}{{extra}}",
+    "missingSummaryRange": "Need for {{range}}: {{summary}}{{extra}}",
+    "addAllMissingRange": "Add all missing to shopping list",
+    "alreadyOnList": "Missing items are already on your shopping list",
+    "planRange": "{{from}} - {{to}}"
   },
   "pantry": {
     "title": "Kitchen Inventory",
@@ -257,6 +261,7 @@
     "addItemTitle": "Add Item to Shopping List",
     "itemNamePlaceholder": "Search or add item name",
     "itemsToBuy": "Items to Buy",
+    "buyCount": "{{count}} to buy",
     "empty": "No items in your shopping list",
     "updating": "Updating your list…",
     "noMatch": "No matching items",
@@ -404,7 +409,22 @@
       "What can I cook with what I have?": "You have chicken breast, rice, broccoli, and soy sauce in your pantry. How about **Garlic Soy Chicken & Broccoli**? About 25 minutes — I only added garlic to your shopping list.",
       "Plan dinners for the rest of this week": "Here's your plan — skipping spicy meals (Alex's preference) and using your expiring spinach:\n\n• Mon: Lemon herb chicken & rice\n• Tue: Spinach lasagna\n• Wed: Veggie stir-fry with tofu\n• Thu: Slow-cooker chili\n• Fri: Fish tacos (kid-friendly)\n\nAdded 6 items to your grocery list.",
       "Add chicken, rice, and broccoli to my pantry": "Done — updated your pantry:\n\n• +2 lb chicken breast\n• +1 bag rice\n• +1 head broccoli\n\nI'll prioritize these in your next meal plan."
-    }
+    },
+    "approvalTool": {
+      "addPantryItems": "Add to pantry",
+      "updatePantryItems": "Update pantry",
+      "removePantryItems": "Remove from pantry",
+      "addItemsToShoppingList": "Add to shopping list",
+      "addMealPlanShortagesToShoppingList": "Add missing ingredients to shopping list",
+      "createRecipe": "Save recipe",
+      "updateRecipe": "Update recipe",
+      "addRecipeToMenu": "Schedule meal",
+      "planMeals": "Schedule meals",
+      "updatePreferences": "Update preferences",
+      "generic": "Apply change"
+    },
+    "recipeIngredients": "Ingredients",
+    "recipeAlreadyToday": "Already on today's dinner"
   },
   "setupGuide": {
     "title": "Setup guide",

@@ -13,6 +13,7 @@ import {
 } from '../utils/guestSession';
 import { isQuotaExceededMessage } from '../utils/quotaExceeded';
 import { parseTypedApprovalReply } from '../utils/approvalReply';
+import { approvalToolTitleKey } from '../utils/approvalTitle';
 
 interface GuestChatBoxProps {
   onGetStarted: () => void;
@@ -461,7 +462,7 @@ export function GuestChatBox({
                 <ul className="mt-2 space-y-1 text-xs text-muted">
                   {pendingApproval.pendingTools.map((tool, index) => (
                     <li key={`${tool.name}-${index}`}>
-                      <span className="font-medium text-ink">{tool.name}</span>
+                      <span className="font-medium text-ink">{t(approvalToolTitleKey(tool.name))}</span>
                       {tool.argsSummary ? ` — ${tool.argsSummary}` : ''}
                     </li>
                   ))}

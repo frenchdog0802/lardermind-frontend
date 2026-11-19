@@ -758,11 +758,9 @@ export function RecipeManager({
 
                       <input type="number" min="0.1" step="any" value={item.quantity} onChange={e => handleUpdateRecipeItem(index, 'quantity', e.target.value)} className="w-16 p-2 border border-line rounded-lg" />
                       <UnitSelect
-                        kind={item.unit_kind || preferredUnitForIngredient({ default_unit: item.unit, unit_kind: item.unit_kind, base_unit: item.base_unit, default_display_unit: item.default_display_unit }, measurementSystem).kind}
                         value={item.unit}
                         onChange={unit => handleUpdateRecipeItem(index, 'unit', unit)}
                         measurementSystem={measurementSystem}
-                        preferSystemUnits
                         className="w-20 p-2 border border-line rounded-lg bg-surface"
                       />
                       <button onClick={() => handleRemoveRecipeItem(index)} className="p-1 rounded-full hover:bg-sage/50 text-herb">
@@ -976,11 +974,9 @@ export function RecipeManager({
 
                     <input type="number" min="0.1" step="any" value={item.quantity} onChange={e => handleUpdateRecipeItem(index, 'quantity', e.target.value)} className="w-14 p-2 text-sm border border-line rounded-lg" />
                     <UnitSelect
-                      kind={item.unit_kind || preferredUnitForIngredient({ default_unit: item.unit, unit_kind: item.unit_kind, base_unit: item.base_unit, default_display_unit: item.default_display_unit }, measurementSystem).kind}
                       value={item.unit}
                       onChange={unit => handleUpdateRecipeItem(index, 'unit', unit)}
                       measurementSystem={measurementSystem}
-                      preferSystemUnits
                       className="w-16 p-2 text-sm border border-line rounded-lg bg-surface"
                     />
                     <button onClick={() => handleRemoveRecipeItem(index)} className="p-1 rounded-full hover:bg-sage/50 text-herb" aria-label={`Remove ${item.name || 'item'}`}>

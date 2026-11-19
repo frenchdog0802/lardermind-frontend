@@ -154,6 +154,8 @@ export type MealAvailabilityStatus = 'ok' | 'short' | 'unknown';
 
 export interface MealAvailabilityEntry {
     meal_plan_id: string;
+    serving_date: string;
+    meal_name?: string;
     status: MealAvailabilityStatus;
     shortages: MealConfirmShortage[];
 }
