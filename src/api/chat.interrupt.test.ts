@@ -36,7 +36,7 @@ describe('web HITL approve inline in transcript', () => {
     );
     assert.match(
       src,
-      /message\.type === 'interrupt' && pendingApproval && renderPendingApprovalCard\(\)/,
+      /message\.type === 'interrupt' &&\s*pendingApproval &&\s*message\.id === lastInterruptMessageId &&\s*renderPendingApprovalCard\(\)/,
       'Approve UI must render on the interrupt message in the transcript',
     );
   });
@@ -53,12 +53,30 @@ describe('web HITL pending must stay actionable', () => {
     );
   });
 
-  it('disables composer send while pendingApproval is set', () => {
+  it('keeps the composer usable while pendingApproval is set and routes typed yes/no to resume', () => {
     const src = readFileSync(join(root, 'src/components/AICookingAssistant.tsx'), 'utf8');
-    assert.match(
+    assert.doesNotMatch(
       src,
       /disabled=\{isTyping\s*\|\|\s*Boolean\(pendingApproval\)/,
-      'composer must block send while HITL approval is pending (mobile parity)',
+      'composer must stay enabled so the user can type yes/no',
+    );
+    assert.match(src, /parseTypedApprovalReply\(/);
+    assert.match(src, /void handleResume\(typed\)/);
+    assert.doesNotMatch(
+      src,
+      /if \(!inputValue\.trim\(\) \|\| isTyping \|\| pendingApproval\) return;/,
+      'handleSendMessage must not drop typed text while approval is pending',
+    );
+  });
+
+  it('guest chat resolves typed yes/no via resume and never clears the card on send', () => {
+    const src = readFileSync(join(root, 'src/components/GuestChatBox.tsx'), 'utf8');
+    assert.match(src, /parseTypedApprovalReply\(/);
+    assert.match(src, /await handleResume\(typed\)/);
+    assert.doesNotMatch(
+      src,
+      /setIsTyping\(true\);\s*setPendingApproval\(null\);/,
+      'must not clear pendingApproval when sending a message',
     );
   });
 

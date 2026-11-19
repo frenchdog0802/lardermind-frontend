@@ -12,6 +12,7 @@ import {
   writeGuestToken,
 } from '../utils/guestSession';
 import { isQuotaExceededMessage } from '../utils/quotaExceeded';
+import { parseTypedApprovalReply } from '../utils/approvalReply';
 
 interface GuestChatBoxProps {
   onGetStarted: () => void;
@@ -183,13 +184,34 @@ export function GuestChatBox({
     const trimmed = prompt.trim();
     if (!trimmed || isTyping || minting) return;
 
+    // While an action is pending, typed text never starts a new turn and never
+    // hides the card: yes/no resolves it, anything else just gets a reminder.
+    if (pendingApproval) {
+      const typed = parseTypedApprovalReply(trimmed);
+      setMessages((prev) => [
+        ...prev,
+        { id: `user-${Date.now()}`, role: 'user', content: trimmed },
+        ...(typed
+          ? []
+          : [
+              {
+                id: `assistant-${Date.now()}`,
+                role: 'assistant' as const,
+                content: t('ai.approvalPendingReminder'),
+              },
+            ]),
+      ]);
+      setInputValue('');
+      if (typed) await handleResume(typed);
+      return;
+    }
+
     setMessages((prev) => [
       ...prev,
       { id: `user-${Date.now()}`, role: 'user', content: trimmed },
     ]);
     setInputValue('');
     setIsTyping(true);
-    setPendingApproval(null);
 
     const assistantId = `assistant-${Date.now()}`;
     setMessages((prev) => [
@@ -304,10 +326,10 @@ export function GuestChatBox({
         { sessionId: pendingApproval.sessionId, decision },
         authOpts,
       );
-      setPendingApproval(null);
       if (res.success && res.data) {
         applyAssistantResponse(res.data);
       } else {
+        if (res.code === 'no_pending_action') setPendingApproval(null);
         setMessages((prev) => [
           ...prev,
           {
