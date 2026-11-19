@@ -10,6 +10,8 @@ interface SubscriptionPanelProps {
   /** When false (keep-alive hidden), skip fetch; refetch when becoming true. */
   active?: boolean;
   checkoutSuccess?: boolean;
+  /** Stripe Checkout Session id from ?session_id=; verified server-side on return. */
+  checkoutSessionId?: string | null;
   checkoutCancelled?: boolean;
   portalReturn?: boolean;
 }
@@ -17,6 +19,7 @@ interface SubscriptionPanelProps {
 export function SubscriptionPanel({
   active = true,
   checkoutSuccess = false,
+  checkoutSessionId = null,
   checkoutCancelled = false,
   portalReturn = false,
 }: SubscriptionPanelProps) {
@@ -46,8 +49,23 @@ export function SubscriptionPanel({
 
   useEffect(() => {
     if (!active) return;
-    void load();
-  }, [active, checkoutSuccess, portalReturn]);
+    let cancelled = false;
+    void (async () => {
+      // Returning from Stripe: verify the session server-side first so Pro activates even
+      // when the webhook is late or not configured. Failure falls back to plain polling.
+      if (checkoutSuccess && checkoutSessionId) {
+        try {
+          await subscriptionApi.confirmCheckout(checkoutSessionId);
+        } catch {
+          // webhook / polling below will still pick it up
+        }
+      }
+      if (!cancelled) await load();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [active, checkoutSuccess, checkoutSessionId, portalReturn]);
 
   // After Stripe Checkout the webhook can land a few seconds after the redirect.
   // Re-check status a bounded number of times until Pro shows up (no endless loop).
@@ -58,6 +76,9 @@ export function SubscriptionPanel({
     const timer = window.setInterval(async () => {
       attempts += 1;
       try {
+        if (checkoutSessionId) {
+          await subscriptionApi.confirmCheckout(checkoutSessionId).catch(() => undefined);
+        }
         const next = await subscriptionApi.getStatus();
         setStatus(next);
         if (next.isPro) window.clearInterval(timer);
@@ -67,7 +88,7 @@ export function SubscriptionPanel({
       if (attempts >= CHECKOUT_STATUS_POLL_MAX) window.clearInterval(timer);
     }, CHECKOUT_STATUS_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [active, checkoutSuccess, statusIsPro]);
+  }, [active, checkoutSuccess, checkoutSessionId, statusIsPro]);
 
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {

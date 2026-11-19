@@ -220,6 +220,8 @@
     "planRange": "{{from}} – {{to}}"
   },
   "pantry": {
+    "itemCount_one": "{{count}} item",
+    "itemCount_other": "{{count}} items",
     "title": "Kitchen Inventory",
     "subtitle": "Track what you have on hand",
     "searchPlaceholder": "Search ingredients...",
@@ -294,7 +296,9 @@
     "syncEmpty": "Select at least one item",
     "quantity": "Qty",
     "unit": "Unit",
-    "syncToPantryOffline": "Connect to the internet to add items to pantry"
+    "syncToPantryOffline": "Connect to the internet to add items to pantry",
+    "purchasedSection": "Purchased ({{count}})",
+    "restore": "Restore"
   },
   "recipes": {
     "uploadingImage": "Uploading image…",
@@ -431,10 +435,14 @@
       "addRecipeToMenu": "Schedule meal",
       "planMeals": "Schedule meals",
       "updatePreferences": "Update preferences",
-      "generic": "Apply change"
+      "generic": "Apply change",
+      "getPreferences": "Read your preferences"
     },
     "recipeIngredients": "Ingredients",
-    "recipeAlreadyToday": "Already on today's dinner"
+    "recipeAlreadyToday": "Already on today's dinner",
+    "openPantry": "Open Pantry",
+    "openCalendar": "Open Calendar",
+    "addedToTodayDinner": "Added to today's dinner ({{date}}). Open Calendar to see it — also filed under Dinner."
   },
   "setupGuide": {
     "title": "Setup guide",
@@ -467,6 +475,145 @@
         "body": "Capture what you’re missing for the week ahead.",
         "cta": "Open shopping list"
       }
+    }
+  },
+  "landing": {
+    "nav": {
+      "pricing": "Pricing",
+      "faq": "FAQ",
+      "login": "Log in"
+    },
+    "hero": {
+      "tagline": "An AI assistant that plans your meals from what's in your pantry.",
+      "signUp": "Sign up free",
+      "login": "Log in",
+      "platforms": "Works on Web · iOS · Android"
+    },
+    "demo": {
+      "eyebrow": "See it in action",
+      "title": "Just ask — LarderMind handles the rest",
+      "body": "Talk to your kitchen in plain language. Plan meals, update your pantry, and build grocery lists — the same chat you use every day in the app. Guest demo: 5 AI messages / day.",
+      "bullet1": "Ask what you can cook with what's already in your fridge",
+      "bullet2": "Plan a week of dinners that respect allergies and picky eaters",
+      "bullet3": "Add ingredients from a pasted fridge list in one message",
+      "liveTry": "Live try"
+    },
+    "struggle": {
+      "title": "The \"what's for dinner?\" struggle is real",
+      "subtitle": "It's not just cooking — it's the mental load of deciding, every single day.",
+      "item1Title": "Decision fatigue",
+      "item1Body": "365 days of \"what should I cook?\" wears you down.",
+      "item2Title": "Picky eaters",
+      "item2Body": "Allergies, dislikes, and preferences — remembered once, applied forever.",
+      "item3Title": "Budget pressure",
+      "item3Body": "Meals that use what you have and keep costs down.",
+      "item4Title": "Leftover guilt",
+      "item4Body": "Ingredients in the fridge, planned into tonight's dinner."
+    },
+    "how": {
+      "title": "How LarderMind works",
+      "step1Title": "Smart memory",
+      "step1Body": "Tell LarderMind once that your kid is allergic to peanuts or your partner dislikes spicy food. It remembers for every plan.",
+      "step1Alt": "Family cooking together in a warm kitchen",
+      "step2Title": "Cook with what you have",
+      "step2Body": "Plans prioritize ingredients already in your pantry and fridge — especially what's about to expire.",
+      "step2Alt": "Fresh vegetables and ingredients on a counter",
+      "step3Title": "Auto grocery list",
+      "step3Body": "Only buy what you're missing. One sorted list, ready for your weekly shop.",
+      "step3Alt": "Fresh produce at a market"
+    },
+    "faq": {
+      "title": "FAQ",
+      "subtitle": "Quick answers if you already use Mealime, SuperCook, or another meal app.",
+      "q1": "How is LarderMind different from Mealime?",
+      "a1": "Mealime is a strong meal-plan and grocery workflow. LarderMind is pantry-first and chat-first: you talk to an AI that remembers preferences, plans from what you already have, and closes the loop into calendar, shopping list, and pantry.",
+      "q2": "How is it different from SuperCook?",
+      "a2": "SuperCook is great at “what can I make from these ingredients?” as a recipe finder. LarderMind covers that idea inside a full kitchen loop — ongoing pantry, weekly plan, shopping list, and cooking confirmation — not only one-shot recipe search.",
+      "q3": "Is there a free plan?",
+      "a3": "Yes. Free includes pantry, shopping, calendar, and a daily AI chat allowance. Upgrade anytime for a 7-day Pro trial — then higher AI and upload limits from $4.99/mo.",
+      "q4": "Where does it run?",
+      "a4": "On the web, and on iOS and Android. Sign up free on the web to start; use the same kitchen across devices."
+    },
+    "join": {
+      "title": "Stop the dinner stress today",
+      "body": "Create a free account and start planning meals with AI in minutes."
+    },
+    "footer": {
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "contact": "Contact",
+      "copyright": "© 2026 LarderMind. All rights reserved."
+    }
+  },
+  "pricing": {
+    "title": "Free vs Pro",
+    "subtitle": "Full kitchen management on Free. Pro raises daily AI chat and upload limits — from {{free}} to {{pro}} messages/day.",
+    "trial": "Start a {{days}}-day Pro trial when you upgrade.",
+    "free": "Free",
+    "pro": "Pro",
+    "forever": "Forever",
+    "perYear": "per year · save ~33%",
+    "perMonth": "per month",
+    "pantryShoppingCalendar": "Pantry, shopping, calendar",
+    "fullAccess": "Full access",
+    "aiChat": "AI chat",
+    "perDay": "{{count}} / day",
+    "recipes": "Recipes",
+    "upTo": "Up to {{count}}",
+    "unlimited": "Unlimited",
+    "imageUploads": "Image uploads",
+    "perMonthLimit": "{{count}} / month",
+    "prioritySupport": "Priority support",
+    "included": "Included",
+    "signUp": "Sign up free",
+    "startAnnual": "Start with annual Pro",
+    "startMonthly": "Start with monthly Pro"
+  },
+  "preview": {
+    "eyebrow": "Product preview",
+    "title": "A real week of dinners — and only what you still need",
+    "subtitle": "Plan from your pantry, then shop the gaps. Same Warm Kitchen screens you use in the app.",
+    "window": "LarderMind · Calendar & Shopping",
+    "thisWeek": "This week",
+    "dinnerPlan": "Dinner plan",
+    "dinner": "Dinner",
+    "shoppingList": "Shopping list",
+    "left": "{{count}} left",
+    "builtFrom": "Built from this week's plan — only ingredients you don't already have.",
+    "caption": "Illustrative weekly plan and grocery list — the same loop in the live app.",
+    "days": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
+    },
+    "meals": {
+      "mon": "Lemon garlic chicken + rice",
+      "tue": "Veggie fried rice (use leftovers)",
+      "wed": "Tomato pasta",
+      "thu": "Sheet-pan salmon",
+      "fri": "Tacos from pantry beans",
+      "sat": "Stir-fry night",
+      "sun": "Soup + leftover bread"
+    },
+    "items": {
+      "chicken": "Chicken thighs",
+      "lemons": "Lemons",
+      "garlic": "Garlic",
+      "pasta": "Pasta",
+      "salmon": "Salmon fillets",
+      "tortillas": "Tortillas",
+      "spinach": "Baby spinach"
+    },
+    "qty": {
+      "pack": "1 pack",
+      "two": "2",
+      "bulb": "1 bulb",
+      "pasta": "500g",
+      "bag": "1 bag"
     }
   }
 }

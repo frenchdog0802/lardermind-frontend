@@ -1,34 +1,29 @@
-const WEEK_PLAN = [
-  { day: 'Mon', meal: 'Lemon garlic chicken + rice' },
-  { day: 'Tue', meal: 'Veggie fried rice (use leftovers)' },
-  { day: 'Wed', meal: 'Tomato pasta' },
-  { day: 'Thu', meal: 'Sheet-pan salmon' },
-  { day: 'Fri', meal: 'Tacos from pantry beans' },
-  { day: 'Sat', meal: 'Stir-fry night' },
-  { day: 'Sun', meal: 'Soup + leftover bread' },
-] as const;
+import { useTranslation } from 'react-i18next';
+
+const WEEK_PLAN = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
 const GROCERY_ITEMS = [
-  { name: 'Chicken thighs', qty: '1 pack', checked: false },
-  { name: 'Lemons', qty: '2', checked: false },
-  { name: 'Garlic', qty: '1 bulb', checked: true },
-  { name: 'Pasta', qty: '500g', checked: false },
-  { name: 'Salmon fillets', qty: '2', checked: false },
-  { name: 'Tortillas', qty: '1 pack', checked: false },
-  { name: 'Baby spinach', qty: '1 bag', checked: true },
+  { key: 'chicken', qty: 'pack', checked: false },
+  { key: 'lemons', qty: 'two', checked: false },
+  { key: 'garlic', qty: 'bulb', checked: true },
+  { key: 'pasta', qty: 'pasta', checked: false },
+  { key: 'salmon', qty: 'two', checked: false },
+  { key: 'tortillas', qty: 'pack', checked: false },
+  { key: 'spinach', qty: 'bag', checked: true },
 ] as const;
 
 export function ProductPreviewMock() {
+  const { t } = useTranslation();
   return (
     <section id="product-preview" className="border-t border-line bg-surface/60 px-[5%] py-20">
       <div className="mx-auto max-w-6xl">
         <div className="mx-auto mb-12 max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-herb">Product preview</p>
+          <p className="text-sm font-semibold uppercase tracking-widest text-herb">{t('preview.eyebrow')}</p>
           <h2 className="mt-3 font-display text-[clamp(1.75rem,4vw,2.25rem)] font-semibold text-ink">
-            A real week of dinners — and only what you still need
+            {t('preview.title')}
           </h2>
           <p className="mt-3 text-lg text-muted">
-            Plan from your pantry, then shop the gaps. Same Warm Kitchen screens you use in the app.
+            {t('preview.subtitle')}
           </p>
         </div>
 
@@ -38,27 +33,27 @@ export function ProductPreviewMock() {
               <span className="h-2.5 w-2.5 rounded-full bg-line" aria-hidden="true" />
               <span className="h-2.5 w-2.5 rounded-full bg-line" aria-hidden="true" />
               <span className="h-2.5 w-2.5 rounded-full bg-line" aria-hidden="true" />
-              <span className="ml-2 text-xs font-medium text-muted">LarderMind · Calendar &amp; Shopping</span>
+              <span className="ml-2 text-xs font-medium text-muted">{t('preview.window')}</span>
             </div>
 
             <div className="grid gap-0 lg:grid-cols-2">
               <div className="border-b border-line p-5 lg:border-b-0 lg:border-r">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="font-display text-lg font-semibold text-ink">This week</h3>
+                  <h3 className="font-display text-lg font-semibold text-ink">{t('preview.thisWeek')}</h3>
                   <span className="rounded-full bg-sage/60 px-2.5 py-0.5 text-xs font-medium text-herb-deep">
-                    Dinner plan
+                    {t('preview.dinnerPlan')}
                   </span>
                 </div>
                 <ul className="space-y-2">
-                  {WEEK_PLAN.map((row) => (
+                  {WEEK_PLAN.map((day) => (
                     <li
-                      key={row.day}
+                      key={day}
                       className="flex items-start gap-3 rounded-xl border border-line bg-surface px-3 py-2.5"
                     >
-                      <span className="w-9 shrink-0 text-sm font-semibold text-herb">{row.day}</span>
+                      <span className="w-9 shrink-0 text-sm font-semibold text-herb">{t(`preview.days.${day}`)}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-ink">{row.meal}</p>
-                        <p className="mt-0.5 text-xs text-muted">Dinner</p>
+                        <p className="text-sm font-medium text-ink">{t(`preview.meals.${day}`)}</p>
+                        <p className="mt-0.5 text-xs text-muted">{t('preview.dinner')}</p>
                       </div>
                     </li>
                   ))}
@@ -67,15 +62,15 @@ export function ProductPreviewMock() {
 
               <div className="p-5">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="font-display text-lg font-semibold text-ink">Shopping list</h3>
+                  <h3 className="font-display text-lg font-semibold text-ink">{t('preview.shoppingList')}</h3>
                   <span className="text-xs font-medium text-muted">
-                    {GROCERY_ITEMS.filter((i) => !i.checked).length} left
+                    {t('preview.left', { count: GROCERY_ITEMS.filter((i) => !i.checked).length })}
                   </span>
                 </div>
                 <ul className="space-y-2">
                   {GROCERY_ITEMS.map((item) => (
                     <li
-                      key={item.name}
+                      key={item.key}
                       className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2.5"
                     >
                       <span
@@ -98,21 +93,21 @@ export function ProductPreviewMock() {
                             item.checked ? 'text-muted line-through' : 'text-ink'
                           }`}
                         >
-                          {item.name}
+                          {t(`preview.items.${item.key}`)}
                         </span>
-                        <span className="text-xs text-muted">{item.qty}</span>
+                        <span className="text-xs text-muted">{t(`preview.qty.${item.qty}`)}</span>
                       </span>
                     </li>
                   ))}
                 </ul>
                 <p className="mt-4 rounded-xl border border-line bg-sage/30 px-3 py-2 text-xs text-herb-deep">
-                  Built from this week&apos;s plan — only ingredients you don&apos;t already have.
+                  {t('preview.builtFrom')}
                 </p>
               </div>
             </div>
           </div>
           <figcaption className="mt-4 text-center text-sm text-muted">
-            Illustrative weekly plan and grocery list — the same loop in the live app.
+            {t('preview.caption')}
           </figcaption>
         </figure>
       </div>

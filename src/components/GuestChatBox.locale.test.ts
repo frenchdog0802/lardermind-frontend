@@ -13,12 +13,8 @@ describe('landing guest chat locale', () => {
     assert.match(src, /getFixedT\(fixedLanguage\)/);
   });
 
-  it('MarketingLanding forces English on the embedded GuestChatBox', () => {
+  it('MarketingLanding lets the embedded GuestChatBox follow the app language', () => {
     const src = readFileSync(join(root, 'src/components/MarketingLanding.tsx'), 'utf8');
-    assert.match(
-      src,
-      /<GuestChatBox[\s\S]*fixedLanguage=["']en["']/,
-      'marketing embed must pass fixedLanguage="en"',
-    );
+    assert.doesNotMatch(src, /fixedLanguage=/);
   });
 });

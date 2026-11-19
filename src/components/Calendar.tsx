@@ -28,6 +28,7 @@ import {
   planRangeShortages,
   shortageDeficit,
   shortagesNotOnList,
+  qtyStillToBuy,
 } from '../utils/shortages';
 interface CalendarProps {
   onBack: () => void;
@@ -237,12 +238,19 @@ export function Calendar({
       // anyway) so the adds can run in parallel without racing on the same row.
       const merged = new Map<string, { s: MealConfirmShortage; qty: number }>();
       for (const s of shortages) {
-        const qty = Math.max(0, s.needed - (s.available ?? 0)) || s.needed;
-        if (qty <= 0) continue;
+        const need = Math.max(0, s.needed - (s.available ?? 0)) || s.needed;
+        if (need <= 0) continue;
         const key = [s.name.trim().toLowerCase(), s.unit, s.ingredient_id ?? ''].join('|');
         const existing = merged.get(key);
-        if (existing) existing.qty += qty;
-        else merged.set(key, { s, qty });
+        if (existing) existing.qty += need;
+        else merged.set(key, { s, qty: need });
+      }
+      // Only the part not already on the (unchecked) list: one source of truth with the
+      // calendar deficits, so repeated / per-meal adds never inflate the list.
+      for (const [key, entry] of [...merged]) {
+        const remaining = qtyStillToBuy(entry.s.name, entry.s.unit, entry.qty, shoppingList);
+        if (remaining <= 0) merged.delete(key);
+        else entry.qty = remaining;
       }
       await Promise.all(
         [...merged.values()].map(({ s, qty }) =>

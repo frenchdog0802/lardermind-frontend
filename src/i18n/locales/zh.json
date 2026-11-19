@@ -220,6 +220,7 @@
     "planRange": "{{from}} – {{to}}"
   },
   "pantry": {
+    "itemCount_other": "{{count}} 項食材",
     "title": "廚房庫存",
     "subtitle": "追蹤手上現有的食材",
     "searchPlaceholder": "搜尋食材...",
@@ -292,7 +293,9 @@
     "syncEmpty": "請至少選擇一項",
     "quantity": "數量",
     "unit": "單位",
-    "syncToPantryOffline": "需連線才能將項目加入庫存"
+    "syncToPantryOffline": "需連線才能將項目加入庫存",
+    "purchasedSection": "已購買（{{count}}）",
+    "restore": "還原"
   },
   "recipes": {
     "uploadingImage": "圖片上傳中…",
@@ -429,10 +432,14 @@
       "addRecipeToMenu": "排入菜單",
       "planMeals": "排入多餐",
       "updatePreferences": "更新偏好設定",
-      "generic": "套用變更"
+      "generic": "套用變更",
+      "getPreferences": "讀取你的偏好設定"
     },
     "recipeIngredients": "食材",
-    "recipeAlreadyToday": "已排入今天晚餐"
+    "recipeAlreadyToday": "已排入今天晚餐",
+    "openPantry": "開啟食材庫存",
+    "openCalendar": "開啟行事曆",
+    "addedToTodayDinner": "已加入今日晚餐（{{date}}）。開啟行事曆即可查看 —— 也已歸類在「晚餐」。"
   },
   "setupGuide": {
     "title": "設定指南",
@@ -456,8 +463,8 @@
       },
       "meals": {
         "title": "規劃餐點",
-        "body": "可在日曆手動排程，或請 AI 幫你規劃本週晚餐。",
-        "ctaCalendar": "開啟日曆",
+        "body": "可在行事曆手動排程，或請 AI 幫你規劃本週晚餐。",
+        "ctaCalendar": "開啟行事曆",
         "ctaAi": "請 AI 規劃晚餐"
       },
       "shopping": {
@@ -465,6 +472,145 @@
         "body": "把這週還缺的食材記下來。",
         "cta": "開啟購物清單"
       }
+    }
+  },
+  "landing": {
+    "nav": {
+      "pricing": "方案價格",
+      "faq": "常見問題",
+      "login": "登入"
+    },
+    "hero": {
+      "tagline": "用你家食材規劃每週餐點的 AI 助理。",
+      "signUp": "免費註冊",
+      "login": "登入",
+      "platforms": "支援網頁 · iOS · Android"
+    },
+    "demo": {
+      "eyebrow": "實際體驗",
+      "title": "開口就問，其餘交給 LarderMind",
+      "body": "用日常語言和你的廚房對話：規劃餐點、更新食材庫存、建立採買清單 —— 和 App 裡每天使用的是同一個對話。訪客體驗：每天 5 則 AI 訊息。",
+      "bullet1": "問問看冰箱現有食材可以煮什麼",
+      "bullet2": "規劃一週晚餐，兼顧過敏與挑食的家人",
+      "bullet3": "貼上冰箱清單，一則訊息就能加入食材",
+      "liveTry": "現場試用"
+    },
+    "struggle": {
+      "title": "「今天晚餐吃什麼？」真的很煩",
+      "subtitle": "累的不只是下廚，而是每一天都要做決定的心理負擔。",
+      "item1Title": "決策疲勞",
+      "item1Body": "一年 365 天都在想「要煮什麼？」，讓人身心俱疲。",
+      "item2Title": "挑食的家人",
+      "item2Body": "過敏、不喜歡的食物與偏好 —— 只要設定一次，永遠記得。",
+      "item3Title": "預算壓力",
+      "item3Body": "善用手邊食材，把花費壓低。",
+      "item4Title": "剩食罪惡感",
+      "item4Body": "冰箱裡的食材，直接排進今晚的菜單。"
+    },
+    "how": {
+      "title": "LarderMind 如何運作",
+      "step1Title": "智慧記憶",
+      "step1Body": "只要告訴 LarderMind 一次孩子對花生過敏、或另一半不吃辣，之後每份計畫都會記得。",
+      "step1Alt": "一家人在溫暖的廚房裡一起做菜",
+      "step2Title": "用現有食材下廚",
+      "step2Body": "計畫會優先使用你儲藏室與冰箱裡已有的食材 —— 尤其是快過期的。",
+      "step2Alt": "檯面上的新鮮蔬菜與食材",
+      "step3Title": "自動採買清單",
+      "step3Body": "只買缺少的食材。一份整理好的清單，方便你每週採買。",
+      "step3Alt": "市場裡的新鮮蔬果"
+    },
+    "faq": {
+      "title": "常見問題",
+      "subtitle": "如果你正在使用 Mealime、SuperCook 或其他餐點 App，這裡有快速解答。",
+      "q1": "LarderMind 和 Mealime 有什麼不同？",
+      "a1": "Mealime 是很扎實的餐點規劃與採買流程。LarderMind 以食材庫存與對話為核心：你和一個會記住偏好的 AI 對話，依現有食材規劃餐點，並串起行事曆、採買清單與食材庫存。",
+      "q2": "和 SuperCook 有什麼不同？",
+      "a2": "SuperCook 擅長回答「這些食材可以做什麼？」的食譜搜尋。LarderMind 把這個概念放進完整的廚房循環 —— 持續更新的食材庫存、每週計畫、採買清單與烹煮確認 —— 而不只是一次性的食譜搜尋。",
+      "q3": "有免費方案嗎？",
+      "a3": "有。免費方案包含食材庫存、採買清單、行事曆，以及每日 AI 對話額度。隨時可升級並享 7 天 Pro 試用 —— 之後每月 $4.99 起即可享有更高的 AI 與上傳額度。",
+      "q4": "可以在哪裡使用？",
+      "a4": "支援網頁、iOS 與 Android。先在網頁免費註冊，即可在不同裝置使用同一個廚房。"
+    },
+    "join": {
+      "title": "今天就告別晚餐壓力",
+      "body": "建立免費帳號，幾分鐘內就能開始用 AI 規劃餐點。"
+    },
+    "footer": {
+      "privacy": "隱私權政策",
+      "terms": "服務條款",
+      "contact": "聯絡我們",
+      "copyright": "© 2026 LarderMind。保留所有權利。"
+    }
+  },
+  "pricing": {
+    "title": "免費版 vs Pro",
+    "subtitle": "免費版即可完整管理廚房。Pro 提高每日 AI 對話與上傳額度 —— 每日訊息從 {{free}} 則提升到 {{pro}} 則。",
+    "trial": "升級時可享 {{days}} 天 Pro 試用。",
+    "free": "免費",
+    "pro": "Pro",
+    "forever": "永久免費",
+    "perYear": "每年 · 約省 33%",
+    "perMonth": "每月",
+    "pantryShoppingCalendar": "食材庫存、採買、行事曆",
+    "fullAccess": "完整功能",
+    "aiChat": "AI 對話",
+    "perDay": "每天 {{count}} 則",
+    "recipes": "食譜",
+    "upTo": "最多 {{count}} 筆",
+    "unlimited": "無限制",
+    "imageUploads": "圖片上傳",
+    "perMonthLimit": "每月 {{count}} 次",
+    "prioritySupport": "優先支援",
+    "included": "包含",
+    "signUp": "免費註冊",
+    "startAnnual": "開始年繳 Pro",
+    "startMonthly": "開始月繳 Pro"
+  },
+  "preview": {
+    "eyebrow": "產品預覽",
+    "title": "一整週的晚餐 —— 只買你還缺的食材",
+    "subtitle": "從現有食材開始規劃，再補買缺口。和 App 裡相同的 Warm Kitchen 畫面。",
+    "window": "LarderMind · 行事曆與採買",
+    "thisWeek": "本週",
+    "dinnerPlan": "晚餐計畫",
+    "dinner": "晚餐",
+    "shoppingList": "採買清單",
+    "left": "還剩 {{count}} 項",
+    "builtFrom": "依本週計畫產生 —— 只列出你還沒有的食材。",
+    "caption": "示意用的每週計畫與採買清單 —— 與實際 App 中的流程相同。",
+    "days": {
+      "mon": "週一",
+      "tue": "週二",
+      "wed": "週三",
+      "thu": "週四",
+      "fri": "週五",
+      "sat": "週六",
+      "sun": "週日"
+    },
+    "meals": {
+      "mon": "檸檬蒜香雞肉 + 白飯",
+      "tue": "蔬菜炒飯（用掉剩菜）",
+      "wed": "番茄義大利麵",
+      "thu": "烤盤鮭魚",
+      "fri": "用庫存豆子做的塔可",
+      "sat": "快炒之夜",
+      "sun": "湯品 + 剩餘麵包"
+    },
+    "items": {
+      "chicken": "雞腿肉",
+      "lemons": "檸檬",
+      "garlic": "大蒜",
+      "pasta": "義大利麵",
+      "salmon": "鮭魚排",
+      "tortillas": "墨西哥薄餅",
+      "spinach": "嫩菠菜"
+    },
+    "qty": {
+      "pack": "1 包",
+      "two": "2 個",
+      "bulb": "1 頭",
+      "pasta": "500 公克",
+      "bag": "1 袋"
     }
   }
 }

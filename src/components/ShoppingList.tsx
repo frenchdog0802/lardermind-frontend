@@ -1,3 +1,4 @@
+import { planShoppingAdd } from '../utils/shoppingAdd';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PlusIcon, CheckIcon, SearchIcon, TrashIcon } from 'lucide-react';
@@ -16,7 +17,7 @@ import {
     shoppingEmptyState,
 } from '../utils/shoppingListState';
 import { createToastController } from '../utils/toastTimer';
-import type { MeasurementSystem } from '../utils/units';
+import { resolveSelectedUnit, unitSelectOptions, type MeasurementSystem } from '../utils/units';
 
 interface ShoppingListProps {
     onBack: () => void;
@@ -141,13 +142,32 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         setSelectedIndex(-1);
     };
 
+    // Unit options exactly as the <UnitSelect> shows them; an untouched form has unit ''
+    // and the select displays the first option, so that is the unit we must persist.
+    const newItemKind = preferredUnitForIngredient(
+        ingredients.find(i => i.name.toLowerCase() === newShoppingItem.name.toLowerCase()) || {
+            default_unit: newShoppingItem.unit,
+        },
+        measurementSystem
+    ).kind;
+    const addLockRef = useRef(false);
+
     const handleAddShoppingItem = () => {
         if (!newShoppingItem.name.trim()) return;
-        const existingItem = shoppingList.find(item => item.name.toLowerCase() === newShoppingItem.name.toLowerCase());
-        if (existingItem) {
-            void updateShoppingListItem({ ...existingItem, quantity: newShoppingItem.quantity }).then(noteShoppingResult);
+        // Synchronous lock: a double click / Enter+click must not submit twice.
+        if (addLockRef.current) return;
+        addLockRef.current = true;
+        window.setTimeout(() => { addLockRef.current = false; }, 600);
+        const unit = resolveSelectedUnit(
+            newShoppingItem.unit,
+            unitSelectOptions(newItemKind, measurementSystem, true),
+        );
+        const draft = { ...newShoppingItem, name: newShoppingItem.name.trim(), unit };
+        const plan = planShoppingAdd(shoppingList, draft);
+        if (plan.action === 'merge') {
+            void updateShoppingListItem({ ...plan.existing, quantity: plan.quantity, unit: plan.unit }).then(noteShoppingResult);
         } else {
-            addShoppingListItem({ ...newShoppingItem });
+            addShoppingListItem(draft);
         }
         setNewShoppingItem({
             name: '',
@@ -220,6 +240,10 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         const item = uncheckConfirmItem;
         setUncheckConfirmItem(null);
         if (!item) return;
+        await handleUncheckConfirmFor(item, alsoUnsync);
+    };
+
+    const handleUncheckConfirmFor = async (item: ShoppingListItem, alsoUnsync: boolean) => {
 
         if (alsoUnsync) {
             await unsyncShoppingItemsFromPantry([item.id]);
@@ -233,6 +257,15 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
             applyCheckedLocally(item.id, false);
             if (shoppingSearchQuery) setShoppingSearchQuery('');
         }
+    };
+
+    const purchasedItems = useMemo(
+        () => shoppingList.filter(item => item.checked && item.synced_to_pantry),
+        [shoppingList],
+    );
+
+    const handleRestorePurchased = (item: ShoppingListItem) => {
+        void handleUncheckConfirmFor(item, true);
     };
 
     const handleRemoveShoppingItem = async (id: string) => {
@@ -434,12 +467,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                                         className="w-1/3 p-2 rounded-lg"
                                     />
                                     <UnitSelect
-                                        kind={preferredUnitForIngredient(
-                                            ingredients.find(i => i.name.toLowerCase() === newShoppingItem.name.toLowerCase()) || {
-                                                default_unit: newShoppingItem.unit,
-                                            },
-                                            measurementSystem
-                                        ).kind}
+                                        kind={newItemKind}
                                         value={newShoppingItem.unit}
                                         onChange={unit => setNewShoppingItem({ ...newShoppingItem, unit })}
                                         measurementSystem={measurementSystem}
@@ -543,6 +571,38 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                             </ul>
                         )}
                     </div>
+                    {purchasedItems.length > 0 && (
+                        <section className="mt-6 bg-surface rounded-xl shadow-sm border border-line overflow-hidden" data-testid="purchased-section">
+                            <h2 className="p-4 border-b border-line bg-linen font-semibold text-ink">
+                                {t('shopping.purchasedSection', { count: purchasedItems.length })}
+                            </h2>
+                            <ul className="divide-y divide-line">
+                                {purchasedItems.map(item => (
+                                    <li key={item.id} className="px-4 py-3 flex items-center gap-3">
+                                        <span className="flex-1 min-w-0 text-muted capitalize">
+                                            {item.name}
+                                            <QuantityLabel
+                                                className="text-sm ml-2"
+                                                quantity={item.quantity}
+                                                unit={item.unit}
+                                                unitKind={item.unit_kind}
+                                                baseUnit={item.base_unit}
+                                                defaultDisplayUnit={item.default_display_unit}
+                                                measurementSystem={measurementSystem}
+                                            />
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRestorePurchased(item)}
+                                            className="shrink-0 text-sm font-medium text-herb hover:underline"
+                                        >
+                                            {t('shopping.restore')}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    )}
                 </main>
             </div>
 

@@ -81,6 +81,7 @@ function AppContent() {
   const [subscriptionNotice, setSubscriptionNotice] = useState<
     'success' | 'cancelled' | 'portal_return' | null
   >(null);
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const isDesktopRail = useMediaQuery('(min-width: 768px)');
   const {
     isAuthenticated,
@@ -136,6 +137,8 @@ function AppContent() {
       subscriptionParam === 'portal_return'
     ) {
       setSubscriptionNotice(subscriptionParam);
+      const sessionId = params.get('session_id');
+      if (subscriptionParam === 'success' && sessionId) setCheckoutSessionId(sessionId);
       if (isAuthenticated) {
         setCurrentView('subscription');
       }
@@ -337,6 +340,7 @@ function AppContent() {
             active={currentView === 'subscription'}
             onOpenMenu={menuOpener}
             checkoutSuccess={subscriptionNotice === 'success'}
+            checkoutSessionId={checkoutSessionId}
             checkoutCancelled={subscriptionNotice === 'cancelled'}
             portalReturn={subscriptionNotice === 'portal_return'}
           />
