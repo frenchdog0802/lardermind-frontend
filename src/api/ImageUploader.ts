@@ -1,52 +1,29 @@
 // src/api/imageUploadApi.ts
+import { api } from "./client";
 import type { ApiResponse } from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+type UploadedImage = { image_url: string; public_id: string };
+
+/** Shared client handles the JWT, Accept header, FormData boundary and non-JSON error bodies
+ *  (it throws an Error with the status for those). Here we only normalise HTTP failures. */
+function assertOk<T>(res: ApiResponse<T>, fallback: string): ApiResponse<T> {
+    const status = res.statusCode ?? 200;
+    if (status >= 400 || res.success === false) {
+        return { ...res, success: false, message: res.message || `${fallback} (${status})` };
+    }
+    return res;
+}
 
 export const ImageUploadApi = {
-    upload: async (file: File): Promise<ApiResponse<{ image_url: string, public_id: string }>> => {
-        const stored = localStorage.getItem("jwt");
-        let token = "";
-        if (stored) {
-            try {
-                token = JSON.parse(stored);
-            } catch {
-                token = stored;
-            }
-        }
-
+    upload: async (file: File): Promise<ApiResponse<UploadedImage>> => {
         const formData = new FormData();
         formData.append("image", file);
-
-        const res = await fetch(`${BASE_URL}/api/upload/image`, {
-            method: "POST",
-            body: formData,
-            headers: {
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-        });
-
-        const json = (await res.json()) as ApiResponse<{ image_url: string, public_id: string }>;
-        return json;
+        return assertOk(await api.postForm<UploadedImage>("/api/upload/image", formData), "Upload failed");
     },
     delete: async (publicId: string): Promise<ApiResponse<null>> => {
-        const stored = localStorage.getItem("jwt");
-        let token = "";
-        if (stored) {
-            try {
-                token = JSON.parse(stored);
-            } catch {
-                token = stored;
-            }
-        }
-
-        const res = await fetch(`${BASE_URL}/api/upload/image/${encodeURIComponent(publicId)}`, {
-            method: "DELETE",
-            headers: {
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-        });
-        const json = (await res.json()) as ApiResponse<null>;
-        return json;
+        return assertOk(
+            await api.delete<null>(`/api/upload/image/${encodeURIComponent(publicId)}`),
+            "Delete failed",
+        );
     },
 };
