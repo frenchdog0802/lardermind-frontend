@@ -1,4 +1,5 @@
 /** Shortage math shared by the Calendar banner, per-meal rows and "add to shopping". */
+import { fromBase, kindOf, normalizeUnit, toBase } from './units.ts';
 
 export type ShortageLike = {
   ingredient_id?: string;
@@ -31,12 +32,44 @@ export function shortageDeficit(s: ShortageLike): number {
 
 function itemKey(s: { ingredient_id?: string; name: string; unit?: string | null }): string {
   const id = s.ingredient_id?.trim();
-  const base = id ? `id:${id}` : `name:${s.name.trim().toLowerCase()}`;
+  const base = id ? `id:${id}` : `name:${shortageNameKey(s.name)}`;
   return `${base}|${(s.unit ?? '').trim().toLowerCase()}`;
 }
 
-function nameUnitKey(name: string, unit?: string | null): string {
-  return `${name.trim().toLowerCase()}|${(unit ?? '').trim().toLowerCase()}`;
+const NAME_NOISE = new Set(['fresh', 'large', 'small', 'medium', 'whole', 'organic', 'ripe', 'raw', 'extra', 'virgin', 'pure', 'plain', 'big']);
+const COOK_STATE = new Set(['cooked', 'uncooked', 'dry', 'dried']);
+const STAPLES = new Set(['rice', 'pasta', 'spaghetti', 'macaroni', 'penne', 'noodle', 'quinoa', 'couscous', 'oat', 'oatmeal', 'bean', 'lentil', 'chickpea', 'barley']);
+
+function singular(t: string): string {
+  if (t.length <= 3 || /[^a-z]/.test(t)) return t;
+  if (t.endsWith('ies') && t.length > 4) return `${t.slice(0, -3)}y`;
+  if (/(oes|ches|shes|xes|sses)$/.test(t)) return t.slice(0, -2);
+  if (t.endsWith('s') && !t.endsWith('ss') && !t.endsWith('us')) return t.slice(0, -1);
+  return t;
+}
+
+/** Mirrors the backend ingredientNameKey: case / plural / filler words / cooked-vs-dry staples. */
+export function shortageNameKey(name: string): string {
+  let tokens = name
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[,;]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((t) => !NAME_NOISE.has(t))
+    .map(singular);
+  if (tokens.some((t) => STAPLES.has(t))) tokens = tokens.filter((t) => !COOK_STATE.has(t));
+  return tokens.join(' ');
+}
+
+/** Row quantity expressed in `unit` when both are the same measurement family; else null. */
+function rowQtyInUnit(qty: number, rowUnit: string | null | undefined, unit: string | null | undefined): number | null {
+  const from = normalizeUnit(rowUnit);
+  const to = normalizeUnit(unit);
+  if (from === to) return qty;
+  const kind = kindOf(from);
+  if (!from || !to || kind === 'count' || kind == null || kind !== kindOf(to)) return null;
+  return fromBase(toBase(qty, from, kind), to, kind);
 }
 
 /** Sum deficits (never gross needs) of several per-meal lists into one buy list. */
@@ -90,14 +123,14 @@ export function shortagesNotOnList<T extends ShortageLike>(
   shortages: T[],
   shoppingList: ShoppingRowLike[],
 ): T[] {
-  const onList = new Map<string, number>();
-  for (const row of shoppingList) {
-    if (row.checked) continue;
-    const key = nameUnitKey(row.name, row.unit);
-    onList.set(key, (onList.get(key) ?? 0) + (Number(row.quantity) || 0));
-  }
   return shortages.filter((s) => {
-    const have = onList.get(nameUnitKey(s.name, s.unit)) ?? 0;
+    const key = shortageNameKey(s.name);
+    let have = 0;
+    for (const row of shoppingList) {
+      if (row.checked || shortageNameKey(row.name) !== key) continue;
+      const q = rowQtyInUnit(Number(row.quantity) || 0, row.unit, s.unit);
+      if (q != null) have += q;
+    }
     return have + 1e-6 < shortageDeficit(s);
   });
 }
