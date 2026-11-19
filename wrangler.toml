@@ -1,0 +1,12 @@
+# Cloudflare Pages — build output matches Vite outDir
+name = "lardermind-web"
+pages_build_output_dir = "dist/app"
+compatibility_date = "2026-09-14"
+
+# Build in CI / dashboard:
+#   npm ci && npm run build
+# Set build-time env:
+#   VITE_API_BASE_URL = https://lardermind-api.<subdomain>.workers.dev
+#   VITE_GOOGLE_CLIENT_ID = <optional>
+# Add the Pages origin (e.g. https://lardermind-web.pages.dev) to
+# backend-cf CORS_ALLOWED_ORIGINS (Worker var / dashboard).

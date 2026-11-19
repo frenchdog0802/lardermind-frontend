@@ -1,0 +1,137 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+/* PLEASE NOTE: THESE TAILWIND IMPORTS SHOULD NEVER BE DELETED */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* DO NOT DELETE THESE TAILWIND IMPORTS, OTHERWISE THE STYLING WILL NOT RENDER AT ALL */
+
+:root {
+  --ink: #1F2420;
+  --muted: #5E675F;
+  --linen: #F3F0E8;
+  --surface: #FAF8F3;
+  --herb: #4F6B4A;
+  --herb-deep: #3A5238;
+  --sage: #D8E0D0;
+  --line: #DDD8CC;
+
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+
+  --shadow-sm: 0 1px 2px rgba(31, 36, 32, 0.04);
+  --shadow-md: 0 4px 12px rgba(31, 36, 32, 0.06);
+  --shadow-lg: 0 12px 24px rgba(31, 36, 32, 0.08);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--linen);
+  color: var(--ink);
+  font-family: 'Source Sans 3', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Fraunces', Georgia, serif;
+  color: var(--ink);
+}
+
+@layer base {
+  input,
+  textarea,
+  select {
+    background-color: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    font-family: 'Source Sans 3', system-ui, sans-serif;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    transition: all 200ms ease;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--herb);
+    outline-offset: 2px;
+  }
+}
+
+button {
+  font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+
+button,
+a,
+[role="button"] {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-herb text-white font-semibold px-6 py-3 rounded-lg
+           hover:bg-herb-deep transition-all duration-200
+           hover:-translate-y-0.5 active:translate-y-0;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent text-herb font-medium px-4 py-2 rounded-lg
+           border border-line hover:bg-sage/50 transition-colors;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-surface border border-line rounded-lg
+           text-ink placeholder:text-muted
+           focus:ring-2 focus:ring-herb/30 focus:border-herb;
+  }
+
+  .page-title {
+    @apply font-display text-2xl font-semibold text-ink;
+  }
+
+  .page-subtitle {
+    @apply text-muted text-sm;
+  }
+
+  .divider {
+    @apply border-t border-line;
+  }
+
+  .list-row {
+    @apply flex items-center gap-3 py-3 border-b border-line last:border-b-0;
+  }
+}

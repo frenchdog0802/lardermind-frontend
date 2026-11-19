@@ -1,0 +1,1399 @@
+﻿import {
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+  type ChangeEvent,
+} from 'react';
+import { useTranslation } from 'react-i18next';
+import { splitInstructionSteps } from '../utils/recipeSteps';
+import { ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
+import { usePantry } from '../contexts/pantryContext';
+import { chatApi, ChatResponse, ChatSession, HistoryMessage, PendingToolSummary } from '../api/chat';
+import { classifyChatResume, readInterruptId } from '../api/resumeOutcome';
+import { mealPlanApi } from '../api/mealPlan';
+import {
+  pantryVisionApi,
+  type RecognizedPantryItem,
+} from '../api/pantryVision';
+import { RecipeSuggestion } from '../api/types';
+import ChatMessageContent from './ChatMessageContent';
+import { ChatComposer } from './ChatComposer';
+import { AppHeader } from './AppHeader';
+import { ChatEmptyState, SuggestedPromptCard } from './ChatEmptyState';
+import { Loading } from './Loading';
+import { PantryImageReviewModal } from './PantryImageReviewModal';
+import {
+  resolveChatBodyMode,
+  resolveChatHeaderIsNewChat,
+} from '../utils/chatBootstrapGate';
+import { isQuotaExceededMessage } from '../utils/quotaExceeded';
+import { parseTypedApprovalReply } from '../utils/approvalReply';
+import { approvalToolTitleKey, isRecipeScheduledOn, localYmd } from '../utils/approvalTitle';
+import { needsFallbackApprovalCard, settleStaleInterrupts } from '../utils/interruptMessages';
+interface AICookingAssistantProps {
+  /** When false, the view is hidden but stays mounted so streams keep running. */
+  isActive?: boolean;
+  /** Prefill the composer when navigating from an empty-state CTA. */
+  pendingPrompt?: string | null;
+  /** Send pendingPrompt right away instead of only prefilling the composer. */
+  pendingPromptAutoSend?: boolean;
+  onPendingPromptConsumed?: () => void;
+  /** Switch to this session when set from the app drawer. */
+  requestedSessionId?: string | null;
+  /** Create / focus a blank chat when true. */
+  requestNewChat?: boolean;
+  onSessionRequestConsumed?: () => void;
+  onOpenMenu?: () => void;
+  onViewRecipe?: (recipeId: string) => void;
+  onViewShoppingList?: () => void;
+  onViewCalendar?: () => void;
+  onViewPantry?: () => void;
+  onViewSubscription?: () => void;
+}
+
+type MessageType =
+  | 'text'
+  | 'recipe_created'
+  | 'recipe_imported'
+  | 'recipe_updated'
+  | 'shopping_list_updated'
+  | 'meal_plan_updated'
+  | 'pantry_updated'
+  | 'preferences_updated'
+  | 'meal_suggestions'
+  | 'multi_action'
+  | 'action_result'
+  | 'interrupt'
+  | 'system'
+  | 'confirmation'
+  | 'error'
+  | 'quota_upsell';
+
+interface ResponseCardData {
+  recipeId?: string;
+  recipeName?: string;
+  ingredientCount?: number;
+  ingredients?: Array<{ name: string; quantity?: string | number; unit?: string }>;
+  steps?: string[];
+  sourceUrl?: string;
+  imported?: boolean;
+  itemsAdded?: number;
+  itemsUpdated?: number;
+  itemsRemoved?: number;
+  items?: Array<{ name: string; quantity?: string | number; unit?: string }>;
+  mealPlanId?: string;
+  mealType?: string;
+  servingDate?: string;
+  mealsScheduled?: number;
+  meals?: Array<{
+    recipeName?: string;
+    mealType?: string;
+    servingDate?: string;
+    /** Legacy snake_case — prefer camelCase fields above */
+    meal_name?: string;
+    serving_date?: string;
+    meal_type?: string;
+  }>;
+  mergedGroups?: number;
+  removedDuplicates?: number;
+  suggestions?: Array<{
+    recipeId?: string;
+    recipeName?: string;
+    matchScore?: number;
+    missingIngredients?: string[];
+    /** Legacy backend field; prefer recipeName */
+    meal_name?: string;
+  }>;
+  actionCount?: number;
+  actions?: Array<Record<string, unknown>>;
+  message?: string;
+  allergies?: string[];
+  dislikes?: string[];
+  likes?: string[];
+  dietaryRestrictions?: string[];
+  householdNotes?: string;
+}
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  type?: MessageType;
+  content: string;
+  timestamp: number;
+  cardData?: ResponseCardData;
+  streaming?: boolean;
+  statusText?: string;
+}
+
+/** Compat: older cardData nested `{ recipe }`; current API uses flat fields. */
+function normalizeRecipeCardData(cardData?: ResponseCardData): ResponseCardData {
+  if (!cardData) return {};
+  const nested = (cardData as ResponseCardData & {
+    recipe?: {
+      id?: string;
+      meal_name?: string;
+      ingredients?: unknown[];
+      instructions?: string[];
+    };
+  }).recipe;
+  if (!nested || typeof nested !== 'object') return cardData;
+  return {
+    ...cardData,
+    recipeId: cardData.recipeId ?? nested.id,
+    recipeName: cardData.recipeName ?? nested.meal_name,
+    ingredientCount:
+      cardData.ingredientCount ??
+      (Array.isArray(nested.ingredients) ? nested.ingredients.length : undefined),
+    steps: cardData.steps ?? nested.instructions,
+  };
+}
+
+export function AICookingAssistant({
+  isActive = true,
+  pendingPrompt = null,
+  pendingPromptAutoSend = false,
+  onPendingPromptConsumed,
+  requestedSessionId = null,
+  requestNewChat = false,
+  onSessionRequestConsumed,
+  onOpenMenu,
+  onViewRecipe,
+  onViewShoppingList,
+  onViewCalendar,
+  onViewPantry,
+  onViewSubscription,
+}: AICookingAssistantProps) {
+  const { t, i18n } = useTranslation();
+  const {
+    addRecipe,
+    fetchAllRecipes,
+    fetchAllShoppingListItems,
+    fetchAllPantryItems,
+    fetchAllMealPlans,
+    mealPlan: contextMealPlans,
+  } = usePantry();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [suggestedRecipes, setSuggestedRecipes] = useState<RecipeSuggestion[]>([]);
+  const [selectedRecipe, setSelectedRecipe] = useState<RecipeSuggestion | null>(null);
+  const [addingToMenuRecipeId, setAddingToMenuRecipeId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [pendingApproval, setPendingApproval] = useState<{
+    sessionId: string;
+    pendingTools: PendingToolSummary[];
+    interruptId?: string;
+  } | null>(null);
+  const [resumeInFlight, setResumeInFlight] = useState(false);
+  const resumeLock = useRef(false);
+  const sendPromptRef = useRef<(text: string) => void>(() => undefined);
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognizeError, setRecognizeError] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewItems, setReviewItems] = useState<RecognizedPantryItem[]>([]);
+  const [reviewPreviewUrl, setReviewPreviewUrl] = useState<string | null>(null);
+  const [reviewEmptyMessage, setReviewEmptyMessage] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+
+  const suggestedPromptCards = useMemo(() => {
+    const raw = t('ai.suggestedPromptCards', { returnObjects: true });
+    if (!Array.isArray(raw)) return [] as SuggestedPromptCard[];
+    return (raw as SuggestedPromptCard[]).filter(
+      (card) =>
+        card &&
+        typeof card.title === 'string' &&
+        typeof card.prompt === 'string' &&
+        card.title.trim() &&
+        card.prompt.trim(),
+    );
+  }, [t, i18n.language]);
+
+  const chatBodyMode = resolveChatBodyMode(isBootstrapping, messages.length);
+  const headerTitle = resolveChatHeaderIsNewChat(isBootstrapping, messages.length)
+    ? t('nav.newChat')
+    : sessions.find((s) => s.id === activeSessionId)?.title?.trim() || t('nav.aiChat');
+
+  // Load sessions + history on mount
+  useEffect(() => {
+    const bootstrap = async () => {
+      try {
+        const sessionsRes = await chatApi.listSessions();
+        const list = sessionsRes.data?.sessions ?? [];
+        setSessions(list);
+        const initialId =
+          list.find((s) => s.isDefault)?.id ?? list[0]?.id ?? null;
+        setActiveSessionId(initialId);
+        if (initialId) {
+          await loadHistoryForSession(initialId);
+        }
+      } catch (error) {
+        console.error('Failed to load chat sessions', error);
+        try {
+          const response = await chatApi.getHistory();
+          if (response.success && response.data?.sessionId) {
+            await loadHistoryForSession(response.data.sessionId);
+          }
+        } catch (historyError) {
+          console.error('Failed to load chat history', historyError);
+        }
+      } finally {
+        setIsBootstrapping(false);
+      }
+    };
+
+    void bootstrap();
+  }, []);
+
+  const mapHistory = (entries: HistoryMessage[]): Message[] =>
+    entries.map((entry) => {
+      const type = (entry.responseType as MessageType | undefined) ?? undefined;
+      const cardTypes: MessageType[] = [
+        'recipe_created', 'recipe_imported', 'recipe_updated',
+        'shopping_list_updated', 'meal_plan_updated', 'pantry_updated',
+        'preferences_updated', 'meal_suggestions', 'multi_action', 'action_result',
+      ];
+      return {
+        id: entry.id,
+        role: entry.role,
+        content: entry.content.replace(/^\[Pantry context:[^\]]*\]\s*/i, '').trim() || entry.content,
+        timestamp: entry.createdAt * 1000,
+        type,
+        cardData:
+          type && cardTypes.includes(type) && entry.cardData
+            ? (entry.cardData as ResponseCardData)
+            : undefined,
+      };
+    });
+
+  const withRestoredInterruptMessage = (
+    messages: Message[],
+    hasPending: boolean,
+  ): Message[] => {
+    if (!hasPending || messages.some((m) => m.type === 'interrupt')) {
+      return messages;
+    }
+    // Older interrupts were not persisted; ensure a row exists for Approve UI.
+    return [
+      ...messages,
+      {
+        id: `interrupt-restored-${Date.now()}`,
+        role: 'assistant',
+        content: 'I need your approval before making these changes.',
+        timestamp: Date.now(),
+        type: 'interrupt' as MessageType,
+      },
+    ];
+  };
+
+  const loadHistoryForSession = async (sessionId: string) => {
+    const response = await chatApi.getHistory(sessionId);
+    if (!response.success || !response.data) {
+      setMessages([]);
+      setPendingApproval(null);
+      return;
+    }
+    const sid = response.data.sessionId ?? sessionId;
+    const pending = response.data.pendingInterrupt;
+    const hasPending = Boolean(pending?.pendingTools?.length);
+    const mapped = response.data.messages?.length
+      ? mapHistory(response.data.messages)
+      : [];
+    setMessages(
+      settleStaleInterrupts(
+        withRestoredInterruptMessage(mapped, hasPending),
+        hasPending,
+        t('ai.approvalResolved'),
+      ),
+    );
+    if (hasPending && pending) {
+      setPendingApproval({
+        sessionId: sid,
+        pendingTools: pending.pendingTools,
+        interruptId: pending.interruptId,
+      });
+    } else {
+      setPendingApproval(null);
+    }
+  };
+
+  const restorePendingApproval = async (sessionId: string) => {
+    try {
+      const response = await chatApi.getHistory(sessionId);
+      const pending = response.data?.pendingInterrupt;
+      if (!response.success || !pending?.pendingTools?.length) return;
+      setPendingApproval({
+        sessionId,
+        pendingTools: pending.pendingTools,
+        interruptId: pending.interruptId,
+      });
+      setMessages((prev) => withRestoredInterruptMessage(prev, true));
+    } catch (error) {
+      console.error('Failed to restore pending approval', error);
+    }
+  };
+
+  const refreshSessions = async () => {
+    const sessionsRes = await chatApi.listSessions();
+    setSessions(sessionsRes.data?.sessions ?? []);
+  };
+
+  // Scroll to bottom of messages (only while the chat tab is visible)
+  useEffect(() => {
+    if (!isActive) return;
+    messagesEndRef.current?.scrollIntoView({
+      behavior: 'smooth'
+    });
+  }, [messages, isActive]);
+  // Focus input when chat becomes visible
+  useEffect(() => {
+    if (!isActive) return;
+    inputRef.current?.focus();
+  }, [isActive]);
+
+  // Prefill composer from empty-state / Home CTAs
+  useEffect(() => {
+    if (!isActive || !pendingPrompt) return;
+    // "Plan my week" sends right away; other CTAs only prefill. Fall back to a
+    // prefill when a turn is already running or an approval is pending.
+    if (pendingPromptAutoSend && !isTyping && !resumeInFlight && !pendingApproval) {
+      sendPromptRef.current(pendingPrompt);
+    } else {
+      setInputValue(pendingPrompt);
+    }
+    onPendingPromptConsumed?.();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [isActive, pendingPrompt, pendingPromptAutoSend, onPendingPromptConsumed]);
+
+  // Drawer Recents / New chat
+  useEffect(() => {
+    if (!isActive) return;
+    if (requestNewChat) {
+      void (async () => {
+        await handleNewSession();
+        onSessionRequestConsumed?.();
+      })();
+      return;
+    }
+    if (requestedSessionId) {
+      void (async () => {
+        await handleSwitchSession(requestedSessionId);
+        onSessionRequestConsumed?.();
+      })();
+    }
+    // handleSwitchSession / handleNewSession are stable enough for this shell; avoid re-firing on identity churn
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, requestedSessionId, requestNewChat]);
+
+  const mapResponseToMessage = (response: ChatResponse): Message => {
+    const cardTypes: MessageType[] = [
+      'recipe_created', 'recipe_imported', 'recipe_updated',
+      'shopping_list_updated', 'meal_plan_updated', 'pantry_updated',
+      'preferences_updated', 'meal_suggestions', 'multi_action', 'action_result',
+    ];
+    const cardData = response.data as ResponseCardData | undefined;
+    return {
+      id: `assistant-${Date.now()}`,
+      role: 'assistant',
+      type: response.type === 'error' ? 'error' : response.type as MessageType,
+      content: response.message,
+      timestamp: Date.now(),
+      cardData: cardTypes.includes(response.type as MessageType) ? cardData : undefined,
+    };
+  };
+
+  const refreshAfterAgentAction = async (type: MessageType) => {
+    const tasks: Promise<unknown>[] = [];
+    if (['recipe_created', 'recipe_imported', 'recipe_updated', 'meal_suggestions', 'multi_action', 'action_result'].includes(type)) {
+      tasks.push(fetchAllRecipes());
+    }
+    if (['meal_plan_updated', 'meal_suggestions', 'multi_action', 'action_result'].includes(type)) {
+      tasks.push(fetchAllMealPlans());
+    }
+    if (['pantry_updated', 'meal_suggestions', 'multi_action', 'action_result'].includes(type)) {
+      tasks.push(Promise.resolve(fetchAllPantryItems()));
+    }
+    if (['shopping_list_updated', 'meal_plan_updated', 'multi_action', 'action_result'].includes(type)) {
+      tasks.push(fetchAllShoppingListItems());
+    }
+    await Promise.all(tasks);
+  };
+
+  const handleAddCreatedRecipeToMenu = async (recipeId: string) => {
+    setAddingToMenuRecipeId(recipeId);
+    try {
+      const servingDate = localYmd();
+      const response = await mealPlanApi.create({
+        recipe_id: recipeId,
+        meal_type: 'dinner',
+        serving_date: servingDate,
+      });
+      if (!response.success) {
+        throw new Error(response.message || "Failed to add recipe to today's dinner");
+      }
+      await Promise.all([fetchAllMealPlans(), fetchAllRecipes()]);
+      const confirmationMessage: Message = {
+        id: `confirmation-${Date.now()}`,
+        role: 'assistant',
+        content: `Added to today's dinner (${servingDate}). Open Calendar to see it — also filed under Dinner.`,
+        timestamp: Date.now(),
+      };
+      setMessages(prev => [...prev, confirmationMessage]);
+    } catch (error) {
+      console.error("Failed to add recipe to today's dinner", error);
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        type: 'error',
+        content: "Could not add this recipe to today's dinner. Please try again.",
+        timestamp: Date.now(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setAddingToMenuRecipeId(null);
+    }
+  };
+
+  const handleViewCreatedRecipe = async (recipeId: string) => {
+    await fetchAllRecipes();
+    onViewRecipe?.(recipeId);
+  };
+
+  const handleViewCalendar = async () => {
+    await fetchAllMealPlans();
+    onViewCalendar?.();
+  };
+
+  const handleViewPantry = async () => {
+    await fetchAllPantryItems();
+    onViewPantry?.();
+  };
+
+  const handleViewShoppingList = async () => {
+    await fetchAllShoppingListItems();
+    onViewShoppingList?.();
+  };
+
+  const renderRecipeCard = (message: Message, label = 'Recipe') => {
+    const card = normalizeRecipeCardData(message.cardData);
+    const steps = card.steps ?? [];
+    const cardIngredients = card.ingredients ?? [];
+    const scheduledToday = isRecipeScheduledOn(contextMealPlans ?? [], card.recipeId, localYmd());
+    return (
+      <div className="mt-3 bg-surface border border-line rounded-xl p-4">
+        <h3 className="font-medium text-ink">{label}: {card.recipeName}</h3>
+        <p className="text-sm text-muted mt-1">
+          {card.ingredientCount ?? 0} ingredients · {steps.length} steps
+        </p>
+        {card.sourceUrl && (
+          <p className="text-xs text-muted mt-1 truncate">From: {card.sourceUrl}</p>
+        )}
+        {cardIngredients.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-medium text-ink">{t('ai.recipeIngredients')}</p>
+            <ul className="mt-1 text-sm text-muted list-disc pl-5 space-y-0.5">
+              {cardIngredients.map((ing, index) => (
+                <li key={`${ing.name}-${index}`}>
+                  {ing.name}
+                  {ing.quantity !== undefined && ing.quantity !== '' ? ` ${ing.quantity}` : ''}
+                  {ing.unit ? ` ${ing.unit}` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {steps.length > 0 && (
+          <ol className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+            {steps.map((step, index) => (
+              <li key={index} className="flex text-sm text-ink">
+                <span className="bg-sage rounded-full w-5 h-5 flex items-center justify-center text-herb-deep font-medium mr-2 flex-shrink-0 text-xs mt-0.5">
+                  {index + 1}
+                </span>
+                <span className="leading-snug">{step}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={() => card.recipeId && handleViewCreatedRecipe(card.recipeId)}
+            className="flex-1 bg-sage/40 text-ink py-2 rounded-lg text-sm"
+          >
+            Edit Recipe
+          </button>
+          {!scheduledToday && (
+            <button
+              onClick={() => card.recipeId && handleAddCreatedRecipeToMenu(card.recipeId)}
+              disabled={addingToMenuRecipeId === card.recipeId}
+              className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-60"
+            >
+              Add to today's dinner
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPendingApprovalCard = () => {
+    if (!pendingApproval) return null;
+    return (
+      <div className="mt-3 rounded-xl border border-line bg-surface p-4">
+        <p className="text-sm font-medium text-ink">Approve these changes?</p>
+        <ul className="mt-2 space-y-1 text-xs text-muted">
+          {pendingApproval.pendingTools.map((tool, index) => (
+            <li key={`${tool.name}-${index}`}>
+              <span className="font-medium text-ink">{t(approvalToolTitleKey(tool.name))}</span>
+              {tool.argsSummary ? ` — ${tool.argsSummary}` : ''}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            disabled={resumeInFlight}
+            onClick={() => void handleResume('approve')}
+            className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-50"
+          >
+            {resumeInFlight ? 'Applying…' : 'Approve'}
+          </button>
+          <button
+            type="button"
+            disabled={resumeInFlight}
+            onClick={() => void handleResume('reject')}
+            className="flex-1 bg-sage/40 text-ink py-2 rounded-lg text-sm disabled:opacity-50"
+          >
+            Reject
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Generate a streaming response from the backend
+  const generateResponse = async (userInput: string) => {
+    const assistantId = `assistant-${Date.now()}`;
+    const streamingMessage: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      streaming: true,
+    };
+
+    setMessages(prev => [...prev, streamingMessage]);
+    setIsTyping(true);
+    let settled = false;
+
+    const settleStreaming = (updater: (message: Message) => Message) => {
+      settled = true;
+      setMessages(prev => prev.map(message =>
+        message.id === assistantId ? updater(message) : message
+      ));
+    };
+
+    try {
+      await chatApi.streamSend(
+        { message: userInput, sessionId: activeSessionId ?? undefined },
+        {
+          onToken: (token) => {
+            setMessages(prev => prev.map(message =>
+              message.id === assistantId
+                ? { ...message, content: message.content + token, statusText: undefined }
+                : message
+            ));
+          },
+          onStatus: (status) => {
+            setMessages(prev => prev.map(message =>
+              message.id === assistantId
+                ? { ...message, statusText: status.message }
+                : message
+            ));
+          },
+          onInterrupt: (response) => {
+            const tools = (response.data?.pendingTools as PendingToolSummary[] | undefined) ?? [];
+            const sessionId =
+              (response.data?.sessionId as string | undefined) ??
+              activeSessionId ??
+              '';
+            setPendingApproval({
+              sessionId,
+              pendingTools: tools,
+              interruptId: readInterruptId(response.data),
+            });
+            settleStreaming((message) => ({
+              ...message,
+              type: 'interrupt',
+              content: response.message || 'Approval required before applying changes.',
+              streaming: false,
+              statusText: undefined,
+            }));
+            // Older interrupt rows are history now; only this one carries the card.
+            setMessages((prev) => settleStaleInterrupts(prev, true, t('ai.approvalResolved')));
+            // Never show an empty / detail-less card: pull the stored pending action.
+            if (tools.length === 0 && sessionId) void restorePendingApproval(sessionId);
+          },
+          onDone: async (response) => {
+            if (response.type === 'interrupt') {
+              const tools = (response.data?.pendingTools as PendingToolSummary[] | undefined) ?? [];
+              const sessionId =
+                (response.data?.sessionId as string | undefined) ??
+                activeSessionId ??
+                '';
+              setPendingApproval({
+                sessionId,
+                pendingTools: tools,
+                interruptId: readInterruptId(response.data),
+              });
+              settleStreaming((message) => ({
+                ...message,
+                type: 'interrupt',
+                content: response.message || 'Approval required before applying changes.',
+                streaming: false,
+                statusText: undefined,
+              }));
+              setMessages((prev) => settleStaleInterrupts(prev, true, t('ai.approvalResolved')));
+              if (tools.length === 0 && sessionId) void restorePendingApproval(sessionId);
+              return;
+            }
+            const finalized = mapResponseToMessage(response);
+            settleStreaming((message) => ({
+              ...finalized,
+              id: assistantId,
+              timestamp: message.timestamp,
+              streaming: false,
+              statusText: undefined,
+            }));
+            if (finalized.type && finalized.type !== 'text' && finalized.type !== 'error') {
+              await refreshAfterAgentAction(finalized.type);
+            }
+            setSuggestedRecipes([]);
+          },
+          onError: (message) => {
+            const quota = isQuotaExceededMessage(message);
+            const errorText = quota
+              ? t('ai.quotaUpsellFree')
+              : message ||
+                "I'm sorry, I'm having trouble connecting to my cooking brain right now. Please try again in a moment.";
+            settleStreaming((entry) => ({
+              ...entry,
+              type: quota ? 'quota_upsell' : 'error',
+              content: errorText,
+              streaming: false,
+              statusText: undefined,
+            }));
+            if (
+              !quota &&
+              /pending action waiting for your approval/i.test(errorText) &&
+              activeSessionId
+            ) {
+              void restorePendingApproval(activeSessionId);
+            }
+          },
+          onSession: (sessionId) => {
+            // First message of a new chat: remember the server-created session so the
+            // next message continues the same conversation (history + one Recents entry).
+            setActiveSessionId((current) => current ?? sessionId);
+            // Recents must list the open chat right away (no re-login needed).
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('lardermind:chat-session-created', { detail: { sessionId } }),
+              );
+            }
+          },
+          onSessionTitle: ({ sessionId, title }) => {
+            setSessions((prev) => {
+              const idx = prev.findIndex((s) => s.id === sessionId);
+              if (idx === -1) {
+                return [
+                  {
+                    id: sessionId,
+                    title,
+                    isDefault: false,
+                    updatedAt: Math.floor(Date.now() / 1000),
+                    createdAt: Math.floor(Date.now() / 1000),
+                  },
+                  ...prev,
+                ];
+              }
+              return prev.map((s) => (s.id === sessionId ? { ...s, title } : s));
+            });
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('lardermind:chat-session-title', {
+                  detail: { sessionId, title },
+                }),
+              );
+            }
+          },
+        },
+      );
+    } catch (error) {
+      console.error('Chat stream error:', error);
+      if (!settled) {
+        settleStreaming((message) => ({
+          ...message,
+          type: 'error',
+          content: "I'm sorry, I'm having trouble connecting to my cooking brain right now. Please try again in a moment.",
+          streaming: false,
+        }));
+      }
+    } finally {
+      setIsTyping(false);
+      if (!settled) {
+        setMessages(prev => prev.map(message =>
+          message.id === assistantId
+            ? { ...message, streaming: false }
+            : message
+        ));
+      }
+    }
+  };
+
+  const pushAssistantNote = (content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `assistant-note-${Date.now()}`,
+        role: 'assistant',
+        type: 'error',
+        content,
+        timestamp: Date.now(),
+      },
+    ]);
+  };
+
+  const handleResume = async (decision: 'approve' | 'reject') => {
+    if (!pendingApproval || resumeLock.current) return;
+    const approval = pendingApproval;
+    resumeLock.current = true;
+    setResumeInFlight(true);
+    try {
+      const response = await chatApi.resume({
+        sessionId: approval.sessionId,
+        decision,
+        ...(approval.interruptId ? { interruptId: approval.interruptId } : {}),
+      });
+      const outcome = classifyChatResume(response);
+      if (outcome.kind === 'expired') {
+        setPendingApproval(null);
+        pushAssistantNote(t('ai.approvalExpired'));
+        return;
+      }
+      if (outcome.kind === 'interrupt_mismatch' || outcome.kind === 'target_missing') {
+        await loadHistoryForSession(approval.sessionId);
+        pushAssistantNote(
+          t(outcome.kind === 'interrupt_mismatch' ? 'ai.approvalMismatch' : 'ai.approvalTargetMissing'),
+        );
+        return;
+      }
+      if (outcome.kind === 'resume_in_progress') {
+        pushAssistantNote(t('ai.approvalInProgress'));
+        return;
+      }
+      if (outcome.kind === 'tool_args_invalid') {
+        setPendingApproval(null);
+        pushAssistantNote(t('ai.approvalInvalid'));
+        return;
+      }
+      if (outcome.kind === 'no_pending_action') {
+        setPendingApproval(null);
+        await loadHistoryForSession(approval.sessionId);
+        pushAssistantNote(t('ai.approvalNone'));
+        return;
+      }
+      if (outcome.kind === 'failed' || !response.success || !response.data) {
+        pushAssistantNote(response.message || t('ai.approvalFailed'));
+        return;
+      }
+
+      setPendingApproval(null);
+      const finalized = mapResponseToMessage(response.data);
+      const isChained = response.data.type === 'interrupt';
+      // The approval that was just resolved is history; a chained one (e.g. planMeals
+      // after createRecipe) becomes the only live card.
+      const additions: Message[] = [];
+      if (isChained) {
+        const prior = response.data.data?.priorCard as
+          | { type?: string; data?: ResponseCardData }
+          | undefined;
+        if (prior?.type && prior.type !== 'text') {
+          additions.push(
+            mapResponseToMessage({
+              type: prior.type,
+              message: '',
+              data: (prior.data ?? {}) as ResponseCardData,
+            } as ChatResponse),
+          );
+        }
+      }
+      additions.push(finalized);
+      setMessages((prev) => [
+        ...settleStaleInterrupts(prev, false, t('ai.approvalResolved')),
+        ...additions,
+      ]);
+      if (finalized.type && finalized.type !== 'text' && finalized.type !== 'error' && finalized.type !== 'interrupt') {
+        await refreshAfterAgentAction(finalized.type);
+      }
+      if (isChained) {
+        const priorType = (response.data.data?.priorCard as { type?: string } | undefined)?.type;
+        if (priorType && priorType !== 'text') {
+          await refreshAfterAgentAction(priorType as MessageType);
+        }
+        const tools = (response.data.data?.pendingTools as PendingToolSummary[] | undefined) ?? [];
+        setPendingApproval({
+          sessionId: approval.sessionId,
+          pendingTools: tools,
+          interruptId: readInterruptId(response.data.data),
+        });
+        if (tools.length === 0) void restorePendingApproval(approval.sessionId);
+      }
+    } catch (error) {
+      console.error('Chat resume failed', error);
+      pushAssistantNote(t('ai.approvalFailed'));
+    } finally {
+      resumeLock.current = false;
+      setResumeInFlight(false);
+    }
+  };
+
+  const handleSwitchSession = async (sessionId: string) => {
+    if (sessionId === activeSessionId || isTyping || resumeInFlight) return;
+    setActiveSessionId(sessionId);
+    setPendingApproval(null);
+    await loadHistoryForSession(sessionId);
+  };
+
+  const handleNewSession = async () => {
+    try {
+      const created = await chatApi.createSession();
+      if (created.success && created.data) {
+        await refreshSessions();
+        setActiveSessionId(created.data.id);
+        setPendingApproval(null);
+        setMessages([]);
+        setSuggestedRecipes([]);
+        setSelectedRecipe(null);
+        setInputValue('');
+      }
+    } catch (error) {
+      console.error('Failed to create chat session', error);
+    }
+  };
+  // Always points at the latest closure so effects can send a prompt directly.
+  sendPromptRef.current = (text: string) => {
+    const clean = text.trim();
+    if (!clean) return;
+    setMessages(prev => [
+      ...prev,
+      { id: `user-${Date.now()}`, role: 'user', content: clean, timestamp: Date.now() },
+    ]);
+    setInputValue('');
+    generateResponse(clean);
+  };
+  // Handle sending a message
+  const handleSendMessage = () => {
+    const text = inputValue.trim();
+    if (!text || isTyping || resumeInFlight) return;
+    // While an action is pending, typed text never starts a new turn and never
+    // hides the card: yes/no resolves it, anything else just gets a reminder.
+    if (pendingApproval) {
+      const typed = parseTypedApprovalReply(text);
+      setMessages(prevMessages => [
+        ...prevMessages,
+        {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: inputValue,
+          timestamp: Date.now()
+        },
+      ]);
+      setInputValue('');
+      if (typed) {
+        void handleResume(typed);
+      } else {
+        pushAssistantNote(t('ai.approvalPendingReminder'));
+      }
+      return;
+    }
+    // Add user message
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: inputValue,
+      timestamp: Date.now()
+    };
+    setMessages(prevMessages => [...prevMessages, userMessage]);
+    setInputValue('');
+    // Generate response
+    generateResponse(inputValue);
+  };
+  // Handle adding a recipe to the cooking app
+  const handleAddToRecipes = (recipe: RecipeSuggestion) => {
+    // Format recipe for the cooking app
+    // Using cast to any to satisfy the complex Recipe type while providing essential fields
+    const newRecipe: any = {
+      id: `ai-recipe-${Date.now()}`,
+      folder_id: 'ai-suggestions',
+      meal_name: recipe.mealName || recipe.name,
+      instructions: recipe.instructions,
+      cookTime: recipe.cookTime,
+      ingredients: recipe.ingredients.map((ing: any) => ({
+        name: ing.name,
+        quantity: ing.quantity,
+        unit: ing.unit,
+      })),
+      image: recipe.image ? { public_id: 'ai-gen', url: recipe.image } : null
+    };
+    // Add to recipes
+    addRecipe(newRecipe);
+    // Add confirmation message
+    const confirmationMessage: Message = {
+      id: `confirmation-${Date.now()}`,
+      role: 'assistant',
+      content: `I've added "${recipe.mealName}" to your recipe collection. You can find it in the Recipe Manager.`,
+      timestamp: Date.now()
+    };
+    setMessages(prevMessages => [...prevMessages, confirmationMessage]);
+  };
+  const isEmptyStage = !selectedRecipe && chatBodyMode === 'empty';
+  // Only the newest interrupt row shows the card (a re-shown card must not duplicate).
+  const lastInterruptMessageId = [...messages]
+    .reverse()
+    .find((m) => m.type === 'interrupt')?.id;
+  // A pending approval must always have a visible card, even if no interrupt row exists.
+  const showFallbackApprovalCard = needsFallbackApprovalCard(messages, Boolean(pendingApproval));
+
+  const closeReviewModal = useCallback(() => {
+    setReviewOpen(false);
+    setReviewItems([]);
+    setReviewEmptyMessage(null);
+    if (reviewPreviewUrl) {
+      URL.revokeObjectURL(reviewPreviewUrl);
+      setReviewPreviewUrl(null);
+    }
+  }, [reviewPreviewUrl]);
+
+  const handleAttachPantryImage = useCallback(() => {
+    if (recognizing || isTyping || pendingApproval) return;
+    setRecognizeError(null);
+    attachInputRef.current?.click();
+  }, [recognizing, isTyping, pendingApproval]);
+
+  const handleAttachFileChange = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+
+      const previewUrl = URL.createObjectURL(file);
+      setRecognizing(true);
+      setRecognizeError(null);
+      try {
+        const res = await pantryVisionApi.recognize(file);
+        if (!res.success || !res.data) {
+          URL.revokeObjectURL(previewUrl);
+          setRecognizeError(
+            res.message || t('pantryVision.errorRecognize'),
+          );
+          return;
+        }
+        setReviewItems(res.data.items ?? []);
+        setReviewEmptyMessage(res.data.message ?? null);
+        setReviewPreviewUrl(previewUrl);
+        setReviewOpen(true);
+      } catch {
+        URL.revokeObjectURL(previewUrl);
+        setRecognizeError(t('pantryVision.errorRecognize'));
+      } finally {
+        setRecognizing(false);
+      }
+    },
+    [t],
+  );
+
+  const composerField = (
+    <>
+      <input
+        ref={attachInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          void handleAttachFileChange(e);
+        }}
+      />
+      {recognizeError ? (
+        <p className="mb-2 text-sm text-danger" role="alert">
+          {recognizeError}
+        </p>
+      ) : null}
+      <ChatComposer
+        ref={inputRef}
+        value={inputValue}
+        onChange={setInputValue}
+        onSend={handleSendMessage}
+        disabled={isTyping || recognizing || resumeInFlight}
+        ariaLabel={t('ai.title')}
+        onAttach={handleAttachPantryImage}
+        attachDisabled={Boolean(pendingApproval)}
+        attaching={recognizing}
+        attachAriaLabel={t('pantryVision.attach')}
+      />
+      <PantryImageReviewModal
+        open={reviewOpen}
+        items={reviewItems}
+        imagePreviewUrl={reviewPreviewUrl}
+        emptyMessage={reviewEmptyMessage}
+        onClose={closeReviewModal}
+        onApplied={() => {
+          void fetchAllPantryItems();
+        }}
+      />
+    </>
+  );
+
+  return (
+    <div className="relative flex flex-col w-full h-[100dvh] min-h-screen bg-linen overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 55% at 50% 38%, rgba(216, 224, 208, 0.42), transparent 70%)',
+        }}
+      />
+      <div className="relative z-10 flex flex-col flex-1 min-h-0">
+      <AppHeader
+        title={headerTitle}
+        onOpenMenu={onOpenMenu}
+        onNewChat={() => {
+          if (!isTyping) void handleNewSession();
+        }}
+      />
+
+      {isEmptyStage ? (
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center px-4 sm:px-6 py-8">
+          <div className="w-full max-w-3xl">
+            <ChatEmptyState
+              suggestedPromptCards={suggestedPromptCards}
+              onSelectPrompt={setInputValue}
+              onViewPantry={onViewPantry}
+              onViewShoppingList={onViewShoppingList}
+            />
+            <div className="mt-8 w-full">{composerField}</div>
+          </div>
+        </div>
+      ) : (
+      <>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-4">
+          {selectedRecipe ? (
+            <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
+              <div className="p-4 border-b border-line bg-linen flex justify-between items-center">
+                <h2 className="font-semibold text-ink">{selectedRecipe.mealName}</h2>
+                <button onClick={() => setSelectedRecipe(null)} className="p-1 rounded-full hover:bg-sage/60" aria-label="Close">
+                  <XIcon size={18} className="text-muted" />
+                </button>
+              </div>
+              <div className="p-6">
+                {selectedRecipe.image && (
+                  <div className="rounded-xl overflow-hidden h-40 mb-6">
+                    <img src={selectedRecipe.image} alt={selectedRecipe.mealName} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="mb-6">
+                  <h3 className="font-medium text-ink mb-2">{t('ai.ingredients')}</h3>
+                  <ul className="space-y-2">
+                    {selectedRecipe.ingredients.map((ingredient: { quantity?: string | number; unit?: string; name: string }, index: number) => (
+                      <li key={index} className="flex items-center">
+                        <div className="w-2 h-2 rounded-full bg-herb mr-2" />
+                        <span>
+                          {ingredient.quantity} {ingredient.unit} {ingredient.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="mb-6">
+                  <h3 className="font-medium text-ink mb-2">{t('ai.instructions')}</h3>
+                  <ol className="space-y-3">
+                    {splitInstructionSteps(selectedRecipe.instructions).map((step: string, index: number) => (
+                      <li key={index} className="flex">
+                        <div className="bg-sage rounded-full w-6 h-6 flex items-center justify-center text-herb-deep font-medium mr-3 flex-shrink-0 mt-0.5">
+                          {index + 1}
+                        </div>
+                        <p className="text-ink">{step}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <button onClick={() => setSelectedRecipe(null)} className="w-1/2 bg-sage/40 text-ink py-2 rounded-lg">
+                    Back
+                  </button>
+                  <button
+                    onClick={() => handleAddToRecipes(selectedRecipe)}
+                    className="w-1/2 bg-herb text-white py-2 rounded-lg flex items-center justify-center"
+                  >
+                    <PlusCircleIcon size={18} className="mr-1" />
+                    Add to Recipes
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : chatBodyMode === 'loading' ? (
+            <Loading compact />
+          ) : (
+            <div className="space-y-8 pb-4">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={
+                      message.role === 'user'
+                        ? 'max-w-[min(85%,28rem)] min-w-[4.5rem] rounded-2xl px-4 py-2.5 sm:py-3 bg-herb text-white'
+                        : message.type === 'error'
+                          ? 'w-full max-w-3xl rounded-2xl px-4 py-3 bg-sage/50 text-herb-deep border border-line'
+                          : message.type === 'quota_upsell'
+                            ? 'w-full max-w-3xl rounded-2xl px-4 py-3 bg-sage/30 text-ink border border-herb'
+                          : 'w-full max-w-3xl text-ink text-base sm:text-[1.0625rem] leading-relaxed'
+                    }
+                  >
+                    <div>
+                      {message.streaming && !message.content ? (
+                        <div className="space-y-2">
+                          <div className="flex space-x-1.5 py-1">
+                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-typing-dot [animation-delay:0ms]" />
+                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-typing-dot [animation-delay:120ms]" />
+                            <span className="w-2 h-2 rounded-full bg-muted/70 animate-typing-dot [animation-delay:240ms]" />
+                          </div>
+                          {message.statusText && (
+                            <p className="text-xs text-muted">{message.statusText}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <ChatMessageContent
+                            content={message.content}
+                            variant={message.role === 'user' ? 'user' : 'assistant'}
+                          />
+                          {message.streaming && (
+                            <span
+                              aria-hidden="true"
+                              className="inline-block w-0.5 h-[1.1em] ml-0.5 bg-herb align-text-bottom animate-pulse"
+                            />
+                          )}
+                          {message.streaming && message.statusText && (
+                            <p className="mt-2 text-xs text-muted">{message.statusText}</p>
+                          )}
+                          {message.type === 'quota_upsell' && onViewSubscription ? (
+                            <button
+                              type="button"
+                              onClick={onViewSubscription}
+                              className="mt-3 rounded-lg bg-herb px-4 py-2 text-sm font-medium text-white"
+                            >
+                              {t('ai.quotaUpsellFreeCta')}
+                            </button>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                    {message.type === 'interrupt' && pendingApproval && message.id === lastInterruptMessageId && renderPendingApprovalCard()}
+                    {message.type === 'recipe_created' && message.cardData && renderRecipeCard(message)}
+                    {message.type === 'recipe_imported' && message.cardData && renderRecipeCard(message, 'Imported recipe')}
+                    {message.type === 'recipe_updated' && message.cardData && (
+                      <div className="mt-3 bg-surface border border-line rounded-xl p-4">
+                        <p className="font-medium text-ink">Updated: {message.cardData.recipeName}</p>
+                        <button
+                          onClick={() => message.cardData?.recipeId && handleViewCreatedRecipe(message.cardData.recipeId)}
+                          className="w-full mt-3 bg-sage/40 text-ink py-2 rounded-lg text-sm"
+                        >
+                          Edit Recipe
+                        </button>
+                      </div>
+                    )}
+                    {message.type === 'shopping_list_updated' && message.cardData && (
+                      <div className="mt-3 bg-surface border border-line rounded-xl p-4">
+                        <p className="font-medium text-ink">
+                          {(message.cardData.itemsAdded ?? 0) > 0
+                            ? `Added ${message.cardData.itemsAdded} items to your shopping list`
+                            : t('ai.shoppingNothingToAdd')}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {(message.cardData.items ?? []).map((item, index) => (
+                            <span key={`${item.name}-${index}`} className="text-xs bg-sage/50 text-herb-deep px-2 py-1 rounded-full">
+                              {item.name}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          onClick={handleViewShoppingList}
+                          className="w-full mt-3 bg-herb text-white py-2 rounded-lg text-sm"
+                        >
+                          View Shopping List
+                        </button>
+                      </div>
+                    )}
+                    {message.type === 'meal_plan_updated' && message.cardData && (
+                      <div className="mt-3 bg-surface border border-line rounded-xl p-4">
+                        <p className="font-medium text-ink">
+                          {message.cardData.mealsScheduled
+                            ? `Scheduled ${message.cardData.mealsScheduled} meal(s)`
+                            : message.cardData.recipeName
+                              ? `${message.cardData.recipeName} — ${message.cardData.mealType} on ${message.cardData.servingDate}`
+                              : 'Meal plan updated'}
+                        </p>
+                        {(message.cardData.meals ?? []).length > 0 && (
+                          <ul className="mt-2 text-sm text-muted space-y-1">
+                            {message.cardData.meals!.map((meal, index) => {
+                              const name = meal.recipeName ?? meal.meal_name ?? '';
+                              const type = meal.mealType ?? meal.meal_type ?? '';
+                              const date = meal.servingDate ?? meal.serving_date ?? '';
+                              return (
+                                <li key={index}>
+                                  {name} · {type} · {date}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                        <button onClick={handleViewCalendar} className="w-full mt-3 bg-herb text-white py-2 rounded-lg text-sm">
+                          Open Calendar
+                        </button>
+                      </div>
+                    )}
+                    {message.type === 'pantry_updated' && message.cardData && (
+                      <div className="mt-3 bg-surface border border-line rounded-xl p-4">
+                        <p className="font-medium text-ink">
+                          {message.cardData.removedDuplicates != null
+                            ? `Pantry organized — merged ${message.cardData.mergedGroups ?? 0} group(s)`
+                            : message.cardData.itemsUpdated != null
+                              ? t('ai.pantryUpdatedItems', { count: message.cardData.itemsUpdated })
+                              : message.cardData.itemsRemoved != null
+                                ? t('ai.pantryRemovedItems', { count: message.cardData.itemsRemoved })
+                                : t('ai.pantryAddedItems', { count: message.cardData.itemsAdded ?? 0 })}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {(message.cardData.items ?? []).map((item, index) => (
+                            <span key={`${item.name}-${index}`} className="text-xs bg-sage/50 text-herb-deep px-2 py-1 rounded-full">
+                              {item.name}
+                              {item.quantity != null && item.quantity !== '' ? ` ${item.quantity}` : ''}
+                              {item.unit ? ` ${item.unit}` : ''}
+                            </span>
+                          ))}
+                        </div>
+                        <button onClick={handleViewPantry} className="w-full mt-3 bg-herb text-white py-2 rounded-lg text-sm">
+                          Open Pantry
+                        </button>
+                      </div>
+                    )}
+                    {message.type === 'preferences_updated' && message.cardData && (
+                      <div className="mt-3 bg-surface border border-line rounded-xl p-4">
+                        <p className="font-medium text-ink mb-2">Preferences saved</p>
+                        <div className="text-sm text-muted space-y-1">
+                          {message.cardData.allergies?.length ? (
+                            <p>Allergies: {message.cardData.allergies.join(', ')}</p>
+                          ) : null}
+                          {message.cardData.dietaryRestrictions?.length ? (
+                            <p>Diet: {message.cardData.dietaryRestrictions.join(', ')}</p>
+                          ) : null}
+                          {message.cardData.householdNotes ? (
+                            <p>Household: {message.cardData.householdNotes}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    )}
+                    {message.type === 'meal_suggestions' && message.cardData && (
+                      <div className="mt-3 bg-surface border border-line rounded-xl p-4">
+                        <p className="font-medium text-ink mb-2">Meal suggestions</p>
+                        <ul className="space-y-2">
+                          {(message.cardData.suggestions ?? []).map((s, index) => {
+                            const name = s.recipeName ?? s.meal_name;
+                            const pct = s.matchScore;
+                            return (
+                            <li key={index} className="text-sm text-ink flex justify-between">
+                              <span>{name}</span>
+                              <span className="text-muted">
+                                {pct != null ? `${pct}% match` : '—'}
+                              </span>
+                            </li>
+                            );
+                          })}
+                        </ul>
+                        <button onClick={handleViewCalendar} className="w-full mt-3 bg-sage/40 text-ink py-2 rounded-lg text-sm">
+                          View Calendar
+                        </button>
+                      </div>
+                    )}
+                    {message.type === 'multi_action' && message.cardData && (
+                      <div className="mt-3 bg-surface border border-line rounded-xl p-4">
+                        <p className="font-medium text-ink">
+                          Completed {message.cardData.actionCount ?? 0} action(s)
+                        </p>
+                        <ul className="mt-2 text-sm text-muted space-y-1">
+                          {(message.cardData.actions ?? []).map((action, index) => (
+                            <li key={index}>{String(action.message ?? action.tool ?? 'Action')}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {suggestedRecipes.length > 0 && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] bg-surface border border-line rounded-2xl p-4 shadow-sm">
+                    <h3 className="font-medium text-ink mb-2">Suggested Recipes</h3>
+                    <div className="space-y-3">
+                      {suggestedRecipes.map((recipe) => (
+                        <div key={recipe.id} className="border border-line rounded-lg p-3 hover:bg-linen">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-medium text-ink">{recipe.mealName}</h4>
+                            <button
+                              onClick={() => setSelectedRecipe(recipe)}
+                              className="p-1 rounded-full hover:bg-sage/60 text-muted"
+                              title="View recipe"
+                            >
+                              <ChevronRightIcon size={16} />
+                            </button>
+                          </div>
+                          {recipe.missingIngredient && (
+                            <div className="flex items-center text-muted text-xs">
+                              <ShoppingCartIcon size={12} className="mr-1" />
+                              <span>Missing: {recipe.missingIngredient.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {showFallbackApprovalCard && (
+                <div className="max-w-3xl mx-auto w-full px-3 sm:px-4">{renderPendingApprovalCard()}</div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {!selectedRecipe && (
+        <div className="shrink-0 bg-transparent px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
+          <div className="max-w-3xl mx-auto w-full">{composerField}</div>
+        </div>
+      )}
+      </>
+      )}
+      </div>
+    </div>
+  );
+}

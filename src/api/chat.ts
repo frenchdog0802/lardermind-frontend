@@ -1,0 +1,390 @@
+import { api } from './client';
+
+export type ChatResponseType =
+    | 'text'
+    | 'recipe_created'
+    | 'recipe_imported'
+    | 'recipe_updated'
+    | 'shopping_list_updated'
+    | 'meal_plan_updated'
+    | 'pantry_updated'
+    | 'meal_suggestions'
+    | 'multi_action'
+    | 'action_result'
+    | 'interrupt'
+    | 'error';
+
+export interface ChatRequest {
+    message: string;
+    sessionId?: string;
+    /** Device local calendar date YYYY-MM-DD for agent “today”. */
+    clientLocalDate?: string;
+    recipeContext?: {
+        recipeId: string;
+        recipeName: string;
+    };
+}
+
+function localCalendarDate(): string {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function withClientLocalDate(data: ChatRequest): ChatRequest {
+    return {
+        ...data,
+        clientLocalDate: data.clientLocalDate ?? localCalendarDate(),
+    };
+}
+
+export interface ChatResumeRequest {
+    sessionId: string;
+    decision: 'approve' | 'reject';
+    note?: string;
+    /** Id of the approval card the user is looking at. Omit to act on the current pending action. */
+    interruptId?: string;
+}
+
+export interface ChatResponse {
+    type: ChatResponseType;
+    message: string;
+    data?: Record<string, unknown>;
+}
+
+export interface PendingToolSummary {
+    name: string;
+    argsSummary: string;
+    id?: string;
+}
+
+export interface ChatSession {
+    id: string;
+    title: string;
+    isDefault: boolean;
+    updatedAt: number | null;
+    createdAt: number | null;
+}
+
+export interface HistoryMessage {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    createdAt: number;
+    responseType?: string;
+    cardData?: Record<string, unknown>;
+}
+
+export interface HistoryPendingInterrupt {
+    pendingTools: PendingToolSummary[];
+    interruptId?: string;
+    /** Unix seconds. Pending actions older than 20 minutes are expired. */
+    expiresAt?: number;
+}
+
+export interface StreamSendHandlers {
+    onToken: (token: string) => void;
+    onDone: (response: ChatResponse) => void;
+    onError: (message: string) => void;
+    onStatus?: (status: { tool?: string; message: string }) => void;
+    onInterrupt?: (response: ChatResponse) => void;
+    onSessionTitle?: (payload: { sessionId: string; title: string }) => void;
+    /** Server-assigned session id for this turn; reuse it for follow-up messages. */
+    onSession?: (sessionId: string) => void;
+}
+
+export type ChatAuthOptions = {
+    /** Override localStorage JWT (e.g. guest session token). */
+    bearerToken?: string;
+};
+
+export const CARD_RESPONSE_TYPES: ChatResponseType[] = [
+    'recipe_created',
+    'recipe_imported',
+    'recipe_updated',
+    'shopping_list_updated',
+    'meal_plan_updated',
+    'pantry_updated',
+    'meal_suggestions',
+    'multi_action',
+    'action_result',
+];
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+
+function getAuthToken(): string {
+    const stored = localStorage.getItem('jwt');
+    if (!stored) return '';
+    try {
+        return JSON.parse(stored) as string;
+    } catch {
+        return stored;
+    }
+}
+
+function decodeSseData(data: string): string {
+    if (!data) return '';
+    try {
+        const parsed: unknown = JSON.parse(data);
+        if (typeof parsed === 'string') {
+            return parsed;
+        }
+    } catch {
+        // Fall through to raw data when not JSON.
+    }
+    return data;
+}
+
+function parseSseEvent(block: string, handlers: StreamSendHandlers) {
+    const lines = block.split('\n');
+    let eventName = 'message';
+    const dataLines: string[] = [];
+
+    for (const line of lines) {
+        if (line.startsWith('event:')) {
+            eventName = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+            dataLines.push(line.slice(5).trimStart());
+        }
+    }
+
+    const data = dataLines.join('\n');
+    if (!data) return;
+
+    if (eventName === 'token') {
+        handlers.onToken(decodeSseData(data));
+        return;
+    }
+
+    if (eventName === 'status') {
+        try {
+            const parsed = JSON.parse(data) as { tool?: string; message?: string };
+            handlers.onStatus?.({
+                tool: parsed.tool,
+                message: parsed.message ?? 'Working on it…',
+            });
+        } catch {
+            handlers.onStatus?.({ message: data || 'Working on it…' });
+        }
+        return;
+    }
+
+    if (eventName === 'interrupt') {
+        try {
+            const parsed = JSON.parse(data) as ChatResponse;
+            handlers.onInterrupt?.(parsed);
+        } catch {
+            handlers.onInterrupt?.({
+                type: 'interrupt',
+                message: data,
+                data: {},
+            });
+        }
+        return;
+    }
+
+    if (eventName === 'done') {
+        handlers.onDone(JSON.parse(data) as ChatResponse);
+        return;
+    }
+
+    if (eventName === 'session') {
+        try {
+            const parsed = JSON.parse(data) as { sessionId?: string };
+            if (parsed.sessionId?.trim()) {
+                handlers.onSession?.(parsed.sessionId.trim());
+            }
+        } catch {
+            // ignore malformed session events
+        }
+        return;
+    }
+
+    if (eventName === 'session_title') {
+        try {
+            const parsed = JSON.parse(data) as { sessionId?: string; title?: string };
+            if (parsed.sessionId?.trim() && parsed.title?.trim()) {
+                handlers.onSessionTitle?.({
+                    sessionId: parsed.sessionId.trim(),
+                    title: parsed.title.trim(),
+                });
+            }
+        } catch {
+            // ignore malformed title events
+        }
+        return;
+    }
+
+    if (eventName === 'error') {
+        try {
+            const parsed = JSON.parse(data) as { message?: string };
+            handlers.onError(parsed.message ?? 'Something went wrong. Please try again.');
+        } catch {
+            handlers.onError(data);
+        }
+    }
+}
+
+async function consumeSseStream(
+    body: ReadableStream<Uint8Array>,
+    handlers: StreamSendHandlers,
+    signal?: AbortSignal,
+) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let receivedTerminalEvent = false;
+
+    const wrappedHandlers: StreamSendHandlers = {
+        onToken: handlers.onToken,
+        onStatus: handlers.onStatus,
+        onSessionTitle: handlers.onSessionTitle,
+        onSession: handlers.onSession,
+        onInterrupt: (response) => {
+            // HITL interrupt is a terminal SSE event (no `done`); do not treat stream end as failure.
+            receivedTerminalEvent = true;
+            handlers.onInterrupt?.(response);
+        },
+        onDone: (response) => {
+            receivedTerminalEvent = true;
+            handlers.onDone(response);
+        },
+        onError: (message) => {
+            receivedTerminalEvent = true;
+            handlers.onError(message);
+        },
+    };
+
+    try {
+        for (;;) {
+            if (signal?.aborted) {
+                await reader.cancel();
+                throw new DOMException('Stream aborted', 'AbortError');
+            }
+
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split('\n\n');
+            buffer = events.pop() ?? '';
+
+            for (const eventBlock of events) {
+                if (eventBlock.trim()) {
+                    parseSseEvent(eventBlock, wrappedHandlers);
+                }
+            }
+        }
+
+        if (buffer.trim()) {
+            parseSseEvent(buffer, wrappedHandlers);
+        }
+    } finally {
+        if (!receivedTerminalEvent && !signal?.aborted) {
+            handlers.onError('The reply was interrupted. Please try again.');
+        }
+    }
+}
+
+async function chatFetchJson<T>(
+    path: string,
+    init: RequestInit,
+    auth?: ChatAuthOptions,
+): Promise<import('./types').ApiResponse<T>> {
+    const token = auth?.bearerToken ?? getAuthToken();
+    const headers = new Headers(init.headers);
+    if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json; charset=UTF-8');
+    }
+    if (!headers.has('Accept')) {
+        headers.set('Accept', 'application/json');
+    }
+    if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+    }
+    const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
+    return (await res.json()) as import('./types').ApiResponse<T>;
+}
+
+export const chatApi = {
+    send: (data: ChatRequest, auth?: ChatAuthOptions) =>
+        auth?.bearerToken
+            ? chatFetchJson<ChatResponse>('/api/chat/send', {
+                  method: 'POST',
+                  body: JSON.stringify(withClientLocalDate(data)),
+              }, auth)
+            : api.post<ChatResponse>('/api/chat/send', withClientLocalDate(data)),
+    resume: (data: ChatResumeRequest, auth?: ChatAuthOptions) =>
+        auth?.bearerToken
+            ? chatFetchJson<ChatResponse>('/api/chat/resume', {
+                  method: 'POST',
+                  body: JSON.stringify(data),
+              }, auth)
+            : api.post<ChatResponse>('/api/chat/resume', data),
+    streamSend: async (
+        data: ChatRequest,
+        handlers: StreamSendHandlers,
+        signal?: AbortSignal,
+        auth?: ChatAuthOptions,
+    ) => {
+        const token = auth?.bearerToken ?? getAuthToken();
+        const response = await fetch(`${BASE_URL}/api/chat/stream`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'text/event-stream',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify(withClientLocalDate(data)),
+            signal,
+        });
+
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            handlers.onError(text || `Stream request failed (${response.status})`);
+            return;
+        }
+
+        if (!response.body) {
+            handlers.onError('Stream response had no body');
+            return;
+        }
+
+        await consumeSseStream(response.body, handlers, signal);
+    },
+    listSessions: () => api.get<{ sessions: ChatSession[] }>('/api/chat/sessions'),
+    createSession: (title?: string, auth?: ChatAuthOptions) =>
+        auth?.bearerToken
+            ? chatFetchJson<ChatSession>(
+                  '/api/chat/sessions',
+                  {
+                      method: 'POST',
+                      body: JSON.stringify(title ? { title } : {}),
+                  },
+                  auth,
+              )
+            : api.post<ChatSession>('/api/chat/sessions', title ? { title } : {}),
+    renameSession: (id: string, title: string) =>
+        api.patch<ChatSession>(`/api/chat/sessions/${id}`, { title }),
+    deleteSession: (id: string) =>
+        api.delete<{ deleted: boolean }>(`/api/chat/sessions/${id}`),
+    getHistory: (sessionId?: string) =>
+        api.get<{
+            sessionId: string;
+            messages: HistoryMessage[];
+            pendingInterrupt?: HistoryPendingInterrupt;
+        }>(
+            sessionId
+                ? `/api/chat/history?sessionId=${encodeURIComponent(sessionId)}`
+                : '/api/chat/history',
+        ),
+    clearHistory: (sessionId?: string) =>
+        api.delete<{ cleared: boolean; sessionId: string }>(
+            sessionId
+                ? `/api/chat/history?sessionId=${encodeURIComponent(sessionId)}`
+                : '/api/chat/history',
+        ),
+    getActions: () => api.get<{ actions: string[]; description: string }>('/api/chat/actions'),
+};
