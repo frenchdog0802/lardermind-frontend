@@ -109,6 +109,28 @@ export function AppDrawer({
     return () => window.removeEventListener('lardermind:chat-session-title', onSessionTitle);
   }, []);
 
+  // A brand-new chat appears in Recents as soon as its session exists (first message),
+  // then reconciles with the server so title / order are right.
+  useEffect(() => {
+    const onSessionCreated = (event: Event) => {
+      const sessionId = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId?.trim();
+      if (!sessionId) return;
+      const nowSec = Math.floor(Date.now() / 1000);
+      setSessions((prev) =>
+        prev.some((s) => s.id === sessionId)
+          ? prev
+          : [
+              { id: sessionId, title: '', isDefault: false, updatedAt: nowSec, createdAt: nowSec },
+              ...prev,
+            ],
+      );
+      setSessionsError(false);
+      void refreshSessions();
+    };
+    window.addEventListener('lardermind:chat-session-created', onSessionCreated);
+    return () => window.removeEventListener('lardermind:chat-session-created', onSessionCreated);
+  }, [refreshSessions]);
+
   useEffect(() => {
     if (!open || isRail) return;
     const onKey = (e: KeyboardEvent) => {
@@ -193,7 +215,7 @@ export function AppDrawer({
           {t('nav.recents')}
         </p>
 
-        {loadingSessions ? (
+        {loadingSessions && sessions.length === 0 ? (
           <p className="text-sm text-muted px-3 py-2">{t('common.loading')}</p>
         ) : sessionsError ? (
           <p className="text-sm text-muted px-3 py-2">{t('nav.recentsLoadError')}</p>

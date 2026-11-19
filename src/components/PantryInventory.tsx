@@ -27,6 +27,8 @@ import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSel
 import { AppHeader } from './AppHeader';
 import { PantryImageReviewModal } from './PantryImageReviewModal';
 import { isAscii } from '../utils/isAscii';
+import { UNDO_TOAST_MS } from '../utils/shoppingListState';
+import { describeVisionFailure, VISION_ACCEPT } from '../utils/pantryVisionPicker';
 import {
   mergeQuantities,
   resolveSelectedUnit,
@@ -140,7 +142,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
     const showToast = (text: string, undo?: () => void) => {
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ text, undo });
-        toastTimerRef.current = setTimeout(() => setToast(null), undo ? 8000 : 3500);
+        toastTimerRef.current = setTimeout(() => setToast(null), undo ? UNDO_TOAST_MS : 3500);
     };
 
     useEffect(() => {
@@ -263,6 +265,20 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         }
     }, [reviewPreviewUrl]);
 
+    const openVisionPicker = useCallback(() => {
+        const input = visionInputRef.current;
+        if (!input) {
+            setRecognizeError(t('pantryVision.pickerUnavailable'));
+            return;
+        }
+        setRecognizeError(null);
+        try {
+            input.click();
+        } catch {
+            setRecognizeError(t('pantryVision.pickerUnavailable'));
+        }
+    }, [t]);
+
     const handleVisionFileChange = useCallback(
         async (e: ChangeEvent<HTMLInputElement>) => {
             const file = e.target.files?.[0];
@@ -276,8 +292,14 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                 const res = await pantryVisionApi.recognize(file);
                 if (!res.success || !res.data) {
                     URL.revokeObjectURL(previewUrl);
+                    // Pro / quota / sign-in gates come back as a failed response: say so.
+                    const failure = describeVisionFailure(res);
                     setRecognizeError(
-                        res.message || t('pantryVision.errorRecognize'),
+                        failure === 'upgrade'
+                            ? t('pantryVision.upgradeRequired')
+                            : failure === 'sign_in'
+                              ? t('pantryVision.signInRequired')
+                              : res.message || t('pantryVision.errorRecognize'),
                     );
                     return;
                 }
@@ -309,11 +331,17 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
             />
             <div className="flex-1 overflow-y-auto">
                 <main className="flex-1 max-w-3xl mx-auto w-full px-6 lg:px-8 py-6">
+                    {/* Visually hidden, NOT display:none: some browsers refuse to open the
+                        picker for a display:none file input. The Scan button is a label bound
+                        to this input, so it works even if the click() call is blocked. */}
                     <input
+                        id="pantry-vision-input"
                         ref={visionInputRef}
                         type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
+                        accept={VISION_ACCEPT}
+                        className="sr-only"
+                        tabIndex={-1}
+                        data-testid="pantry-vision-input"
                         onChange={(e) => {
                             void handleVisionFileChange(e);
                         }}
@@ -349,17 +377,36 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                     </div>
 
                     <div className="mb-4 flex flex-wrap items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => visionInputRef.current?.click()}
-                            disabled={recognizing}
-                            className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-sage/40 disabled:opacity-60"
+                        <label
+                            htmlFor="pantry-vision-input"
+                            role="button"
+                            tabIndex={recognizing ? -1 : 0}
+                            aria-disabled={recognizing}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    openVisionPicker();
+                                }
+                            }}
+                            onClick={(e) => {
+                                // A native label click already opens the picker; only guard
+                                // the in-flight state and surface a visible error if no input.
+                                if (recognizing) {
+                                    e.preventDefault();
+                                    return;
+                                }
+                                if (!visionInputRef.current) {
+                                    e.preventDefault();
+                                    setRecognizeError(t('pantryVision.pickerUnavailable'));
+                                }
+                            }}
+                            className={`inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-sage/40 cursor-pointer ${recognizing ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                             <CameraIcon size={16} />
                             {recognizing
                                 ? t('common.loading')
                                 : t('pantryVision.scan')}
-                        </button>
+                        </label>
                         {recognizeError ? (
                             <p className="text-sm text-red-700" role="alert">
                                 {recognizeError}

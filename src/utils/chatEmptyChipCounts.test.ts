@@ -10,16 +10,18 @@ describe('chatEmptyChipCounts', () => {
     assert.equal(pantryChipCount([{ id: '1' }, { id: '2' }]), 2);
   });
 
-  it('buyChipCount counts only unchecked shopping rows', () => {
+  it('buyChipCount counts rows still on the list, not ones already moved to the pantry', () => {
     assert.equal(buyChipCount(undefined), 0);
     assert.equal(buyChipCount([]), 0);
     assert.equal(
       buyChipCount([
         { id: 'a', checked: false },
-        { id: 'b', checked: true },
+        { id: 'b', checked: true, synced_to_pantry: true },
         { id: 'c' },
+        // mid check-off: checked but still listed until it syncs
+        { id: 'd', checked: true, synced_to_pantry: false },
       ]),
-      2,
+      3,
     );
   });
 });

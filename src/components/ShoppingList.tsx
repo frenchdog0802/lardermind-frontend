@@ -8,6 +8,12 @@ import { NumberInput } from './NumberInput';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
 import { AppHeader } from './AppHeader';
 import { isAscii } from '../utils/isAscii';
+import {
+    INFO_TOAST_MS,
+    UNDO_TOAST_MS,
+    isOnShoppingList,
+    shoppingEmptyState,
+} from '../utils/shoppingListState';
 import type { MeasurementSystem } from '../utils/units';
 
 interface ShoppingListProps {
@@ -44,6 +50,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
     const [showMessage, setShowMessage] = useState(false);
     const [message, setMessage] = useState('');
     const [undoIds, setUndoIds] = useState<string[] | null>(null);
+    const [inFlightIds, setInFlightIds] = useState<string[]>([]);
     const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [shoppingSearchQuery, setShoppingSearchQuery] = useState('');
     const [newShoppingItem, setNewShoppingItem] = useState({
@@ -109,6 +116,11 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         });
     }, [shoppingList, shoppingSearchQuery]);
 
+    const onListCount = useMemo(
+        () => shoppingList.filter(isOnShoppingList).length,
+        [shoppingList],
+    );
+
     const pendingSyncItems = useMemo(
         () => shoppingList.filter(item => item.checked && !item.synced_to_pantry),
         [shoppingList],
@@ -122,7 +134,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         undoTimerRef.current = setTimeout(() => {
             setShowMessage(false);
             setUndoIds(null);
-        }, idsForUndo ? 10000 : 3000);
+        }, idsForUndo ? UNDO_TOAST_MS : INFO_TOAST_MS);
     };
 
     const noteShoppingResult = (res: { code?: string }) => {
@@ -179,26 +191,32 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         }
 
         const updatedItem = { ...item, checked: !item.checked };
-        const res = await updateShoppingListItem(updatedItem);
-        if (res.code === 'version_conflict') {
-            noteShoppingResult(res);
-            return;
-        }
-        if (res.success) {
-            applyCheckedLocally(id, updatedItem.checked);
-            if (shoppingSearchQuery) setShoppingSearchQuery('');
-            if (updatedItem.checked) {
-                // One step: checking off also adds the item to the pantry (with Undo).
-                const syncRes = await syncShoppingItemsToPantry([{ id }]);
-                const syncedIds = syncRes.success && syncRes.data
-                    ? syncRes.data.synced.map(i => i.id)
-                    : [];
-                if (syncedIds.length > 0) {
-                    showToast(t('shopping.itemAddedToPantry', { name: item.name }), syncedIds);
-                } else {
-                    showToast(t('shopping.purchasedOnly'));
+        // Keep the "empty list" message away while this check-off is pending.
+        setInFlightIds(prev => [...prev, id]);
+        try {
+            const res = await updateShoppingListItem(updatedItem);
+            if (res.code === 'version_conflict') {
+                noteShoppingResult(res);
+                return;
+            }
+            if (res.success) {
+                applyCheckedLocally(id, updatedItem.checked);
+                if (shoppingSearchQuery) setShoppingSearchQuery('');
+                if (updatedItem.checked) {
+                    // One step: checking off also adds the item to the pantry (with Undo).
+                    const syncRes = await syncShoppingItemsToPantry([{ id }]);
+                    const syncedIds = syncRes.success && syncRes.data
+                        ? syncRes.data.synced.map(i => i.id)
+                        : [];
+                    if (syncedIds.length > 0) {
+                        showToast(t('shopping.itemAddedToPantry', { name: item.name }), syncedIds);
+                    } else {
+                        showToast(t('shopping.purchasedOnly'));
+                    }
                 }
             }
+        } finally {
+            setInFlightIds(prev => prev.filter(x => x !== id));
         }
     };
 
@@ -237,6 +255,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         if (unchecked.length === 0 || isCompletingAll) return;
 
         setIsCompletingAll(true);
+        setInFlightIds(prev => [...prev, ...unchecked.map(i => i.id)]);
         try {
             const results = await Promise.all(
                 unchecked.map(item => updateShoppingListItem({ ...item, checked: true }))
@@ -264,6 +283,8 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                 showToast(conflict ? t('shopping.versionConflict') : t('shopping.completeFailed'));
             }
         } finally {
+            const done = new Set(unchecked.map(i => i.id));
+            setInFlightIds(prev => prev.filter(x => !done.has(x)));
             setIsCompletingAll(false);
         }
     };
@@ -306,18 +327,31 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         }
     };
 
+    const emptyState = shoppingEmptyState({
+        visibleCount: filteredShoppingItems.length,
+        onListCount,
+        inFlightCount: inFlightIds.length,
+        searchQuery: shoppingSearchQuery,
+    });
+
     const handleUndoSync = async () => {
         if (!undoIds?.length) return;
         const ids = undoIds;
         setUndoIds(null);
         setShowMessage(false);
         if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-        const res = await unsyncShoppingItemsFromPantry(ids);
-        if (res.success && res.data) {
-            // Undo fully reverts the check-off so the item returns to Items to Buy.
-            for (const restored of res.data.unsynced) {
-                await updateShoppingListItem({ ...restored, checked: false });
+        setInFlightIds(prev => [...prev, ...ids]);
+        try {
+            const res = await unsyncShoppingItemsFromPantry(ids);
+            if (res.success && res.data) {
+                // Undo fully reverts the check-off so the item returns to Items to Buy.
+                // (The server also removes / restores the pantry row it touched.)
+                for (const restored of res.data.unsynced) {
+                    await updateShoppingListItem({ ...restored, checked: false });
+                }
             }
+        } finally {
+            setInFlightIds(prev => prev.filter(x => !ids.includes(x)));
         }
     };
 
@@ -512,12 +546,18 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                                 {isCompletingAll ? 'Completing…' : 'Complete all'}
                             </button>
                         </div>
-                        {filteredShoppingItems.length === 0 ? (
+                        {emptyState !== 'list' ? (
                             <div className="p-6 text-center">
-                                <p className="text-muted">{t('shopping.empty')}</p>
-                                {shoppingSearchQuery ? (
+                                {emptyState === 'in_progress' ? (
+                                    <p className="text-muted" role="status">{t('shopping.updating')}</p>
+                                ) : (
+                                    <p className="text-muted">
+                                        {emptyState === 'no_match' ? t('shopping.noMatch') : t('shopping.empty')}
+                                    </p>
+                                )}
+                                {emptyState === 'no_match' ? (
                                     <p className="text-muted text-sm mt-1">Try a different search term</p>
-                                ) : onAskAi ? (
+                                ) : emptyState === 'empty' && onAskAi ? (
                                     <button
                                         type="button"
                                         onClick={() => onAskAi(t('ai.emptyPrompts.pasteList'))}

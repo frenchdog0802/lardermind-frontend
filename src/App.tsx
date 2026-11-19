@@ -273,6 +273,7 @@ function AppContent() {
           <Calendar
             onBack={navigateToAiAssistant}
             onOpenMenu={menuOpener}
+            onAskAi={navigateToAiAssistant}
           />
         </div>
       )}

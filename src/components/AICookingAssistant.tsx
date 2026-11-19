@@ -30,6 +30,7 @@ import {
 } from '../utils/chatBootstrapGate';
 import { isQuotaExceededMessage } from '../utils/quotaExceeded';
 import { parseTypedApprovalReply } from '../utils/approvalReply';
+import { needsFallbackApprovalCard, settleStaleInterrupts } from '../utils/interruptMessages';
 interface AICookingAssistantProps {
   /** When false, the view is hidden but stays mounted so streams keep running. */
   isActive?: boolean;
@@ -75,6 +76,8 @@ interface ResponseCardData {
   sourceUrl?: string;
   imported?: boolean;
   itemsAdded?: number;
+  itemsUpdated?: number;
+  itemsRemoved?: number;
   items?: Array<{ name: string; quantity?: string | number; unit?: string }>;
   mealPlanId?: string;
   mealType?: string;
@@ -294,7 +297,13 @@ export function AICookingAssistant({
     const mapped = response.data.messages?.length
       ? mapHistory(response.data.messages)
       : [];
-    setMessages(withRestoredInterruptMessage(mapped, hasPending));
+    setMessages(
+      settleStaleInterrupts(
+        withRestoredInterruptMessage(mapped, hasPending),
+        hasPending,
+        t('ai.approvalResolved'),
+      ),
+    );
     if (hasPending && pending) {
       setPendingApproval({
         sessionId: sid,
@@ -593,6 +602,10 @@ export function AICookingAssistant({
               streaming: false,
               statusText: undefined,
             }));
+            // Older interrupt rows are history now; only this one carries the card.
+            setMessages((prev) => settleStaleInterrupts(prev, true, t('ai.approvalResolved')));
+            // Never show an empty / detail-less card: pull the stored pending action.
+            if (tools.length === 0 && sessionId) void restorePendingApproval(sessionId);
           },
           onDone: async (response) => {
             if (response.type === 'interrupt') {
@@ -613,6 +626,8 @@ export function AICookingAssistant({
                 streaming: false,
                 statusText: undefined,
               }));
+              setMessages((prev) => settleStaleInterrupts(prev, true, t('ai.approvalResolved')));
+              if (tools.length === 0 && sessionId) void restorePendingApproval(sessionId);
               return;
             }
             const finalized = mapResponseToMessage(response);
@@ -653,6 +668,12 @@ export function AICookingAssistant({
             // First message of a new chat: remember the server-created session so the
             // next message continues the same conversation (history + one Recents entry).
             setActiveSessionId((current) => current ?? sessionId);
+            // Recents must list the open chat right away (no re-login needed).
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('lardermind:chat-session-created', { detail: { sessionId } }),
+              );
+            }
           },
           onSessionTitle: ({ sessionId, title }) => {
             setSessions((prev) => {
@@ -762,17 +783,44 @@ export function AICookingAssistant({
 
       setPendingApproval(null);
       const finalized = mapResponseToMessage(response.data);
-      setMessages((prev) => [...prev, finalized]);
+      const isChained = response.data.type === 'interrupt';
+      // The approval that was just resolved is history; a chained one (e.g. planMeals
+      // after createRecipe) becomes the only live card.
+      const additions: Message[] = [];
+      if (isChained) {
+        const prior = response.data.data?.priorCard as
+          | { type?: string; data?: ResponseCardData }
+          | undefined;
+        if (prior?.type && prior.type !== 'text') {
+          additions.push(
+            mapResponseToMessage({
+              type: prior.type,
+              message: '',
+              data: (prior.data ?? {}) as ResponseCardData,
+            } as ChatResponse),
+          );
+        }
+      }
+      additions.push(finalized);
+      setMessages((prev) => [
+        ...settleStaleInterrupts(prev, false, t('ai.approvalResolved')),
+        ...additions,
+      ]);
       if (finalized.type && finalized.type !== 'text' && finalized.type !== 'error' && finalized.type !== 'interrupt') {
         await refreshAfterAgentAction(finalized.type);
       }
-      if (response.data.type === 'interrupt') {
+      if (isChained) {
+        const priorType = (response.data.data?.priorCard as { type?: string } | undefined)?.type;
+        if (priorType && priorType !== 'text') {
+          await refreshAfterAgentAction(priorType as MessageType);
+        }
         const tools = (response.data.data?.pendingTools as PendingToolSummary[] | undefined) ?? [];
         setPendingApproval({
           sessionId: approval.sessionId,
           pendingTools: tools,
           interruptId: readInterruptId(response.data.data),
         });
+        if (tools.length === 0) void restorePendingApproval(approval.sessionId);
       }
     } catch (error) {
       console.error('Chat resume failed', error);
@@ -876,6 +924,8 @@ export function AICookingAssistant({
   const lastInterruptMessageId = [...messages]
     .reverse()
     .find((m) => m.type === 'interrupt')?.id;
+  // A pending approval must always have a visible card, even if no interrupt row exists.
+  const showFallbackApprovalCard = needsFallbackApprovalCard(messages, Boolean(pendingApproval));
 
   const closeReviewModal = useCallback(() => {
     setReviewOpen(false);
@@ -1131,7 +1181,9 @@ export function AICookingAssistant({
                     {message.type === 'shopping_list_updated' && message.cardData && (
                       <div className="mt-3 bg-surface border border-line rounded-xl p-4">
                         <p className="font-medium text-ink">
-                          Added {message.cardData.itemsAdded ?? 0} items to your shopping list
+                          {(message.cardData.itemsAdded ?? 0) > 0
+                            ? `Added ${message.cardData.itemsAdded} items to your shopping list`
+                            : t('ai.shoppingNothingToAdd')}
                         </p>
                         <div className="flex flex-wrap gap-2 mt-3">
                           {(message.cardData.items ?? []).map((item, index) => (
@@ -1181,12 +1233,18 @@ export function AICookingAssistant({
                         <p className="font-medium text-ink">
                           {message.cardData.removedDuplicates != null
                             ? `Pantry organized — merged ${message.cardData.mergedGroups ?? 0} group(s)`
-                            : `Added ${message.cardData.itemsAdded ?? 0} item(s) to pantry`}
+                            : message.cardData.itemsUpdated != null
+                              ? t('ai.pantryUpdatedItems', { count: message.cardData.itemsUpdated })
+                              : message.cardData.itemsRemoved != null
+                                ? t('ai.pantryRemovedItems', { count: message.cardData.itemsRemoved })
+                                : t('ai.pantryAddedItems', { count: message.cardData.itemsAdded ?? 0 })}
                         </p>
                         <div className="flex flex-wrap gap-2 mt-3">
                           {(message.cardData.items ?? []).map((item, index) => (
                             <span key={`${item.name}-${index}`} className="text-xs bg-sage/50 text-herb-deep px-2 py-1 rounded-full">
                               {item.name}
+                              {item.quantity != null && item.quantity !== '' ? ` ${item.quantity}` : ''}
+                              {item.unit ? ` ${item.unit}` : ''}
                             </span>
                           ))}
                         </div>
@@ -1276,6 +1334,9 @@ export function AICookingAssistant({
                     </div>
                   </div>
                 </div>
+              )}
+              {showFallbackApprovalCard && (
+                <div className="max-w-3xl mx-auto w-full px-3 sm:px-4">{renderPendingApprovalCard()}</div>
               )}
               <div ref={messagesEndRef} />
             </div>

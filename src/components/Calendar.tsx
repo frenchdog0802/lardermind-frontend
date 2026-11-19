@@ -18,10 +18,13 @@ import { dateLocale } from '../i18n';
 interface CalendarProps {
   onBack: () => void;
   onOpenMenu?: () => void;
+  /** Opens the chat composer prefilled with a prompt (same hook other pages use). */
+  onAskAi?: (prompt: string) => void;
 }
 export function Calendar({
   onBack: _onBack,
   onOpenMenu,
+  onAskAi,
 }: CalendarProps) {
   const { t, i18n } = useTranslation();
   const {
@@ -640,14 +643,25 @@ export function Calendar({
       title={t('calendar.title')}
       onOpenMenu={onOpenMenu}
       rightSlot={
-        <button
-          type="button"
-          onClick={() => handleOpenAddRecipe(new Date())}
-          className="w-10 h-10 flex items-center justify-center rounded-full text-ink hover:bg-sage/50 transition-colors"
-          aria-label={t('calendar.addRecipe')}
-        >
-          <PlusIcon size={20} />
-        </button>
+        <div className="flex items-center gap-1">
+          {onAskAi ? (
+            <button
+              type="button"
+              onClick={() => onAskAi(t('calendar.planWeekPrompt'))}
+              className="h-10 px-3 inline-flex items-center rounded-full text-sm font-medium text-herb-deep bg-sage/50 hover:bg-sage transition-colors"
+            >
+              {t('calendar.planWeek')}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => handleOpenAddRecipe(new Date())}
+            className="w-10 h-10 flex items-center justify-center rounded-full text-ink hover:bg-sage/50 transition-colors"
+            aria-label={t('calendar.addRecipe')}
+          >
+            <PlusIcon size={20} />
+          </button>
+        </div>
       }
     />
     <div className="flex-1 overflow-y-auto">
