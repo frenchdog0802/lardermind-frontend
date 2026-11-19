@@ -1,5 +1,6 @@
 {
   "common": {
+    "saveFailed": "Could not save your change. It has been undone.",
     "loading": "Loading...",
     "save": "Save Changes",
     "saving": "Saving…",

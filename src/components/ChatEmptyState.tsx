@@ -41,9 +41,8 @@ export function ChatEmptyState({
     if (!showChips) return;
     void fetchAllPantryItems();
     void fetchAllShoppingListItems();
-    // Context fetch fns are new each render; load once when chips are shown.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount/showChips only
-  }, [showChips]);
+    // Context fetchers are stable and TTL-deduped, so this is cheap when data is fresh.
+  }, [showChips, fetchAllPantryItems, fetchAllShoppingListItems]);
 
   const period = greetingPeriodNow(now);
   const greetingKey =

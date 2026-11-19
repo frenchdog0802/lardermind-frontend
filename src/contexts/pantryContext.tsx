@@ -1,4 +1,6 @@
-import React, { useState, createContext, useContext, useEffect, useRef } from 'react';
+import React, { useState, createContext, useContext, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { createDedupedFetcher, type DedupedFetcher } from '../utils/dedupedFetch';
 import { PantryItem, ShoppingListItem, Recipe, Folder, UserSettings, IngredientEntry, MealPlan, ApiResponse, ConfirmMealPlanResult } from '../api/types';
 import { recipeApi } from '../api/recipes';
 import { folderApi } from '../api/folder';
@@ -97,17 +99,40 @@ function normalizeMealPlan(raw: Record<string, unknown> | MealPlan): MealPlan {
   };
 }
 
+/** `force: true` skips the in-flight/30 s cache (use after a mutation or an explicit refresh). */
+export interface FetchOptions {
+  force?: boolean;
+}
+
+/** State mirrored in a ref so stable callbacks can read the latest value (for rollbacks). */
+function useRefState<T>(initial: T) {
+  const [state, setState] = useState<T>(initial);
+  const ref = useRef<T>(initial);
+  const commit = useCallback((next: T | ((prev: T) => T)) => {
+    const value = typeof next === 'function' ? (next as (prev: T) => T)(ref.current) : next;
+    ref.current = value;
+    setState(value);
+  }, []);
+  return [state, commit, ref] as const;
+}
+
+function useDedupedFetcher<T>(load: () => Promise<T>): DedupedFetcher<T> {
+  const ref = useRef<DedupedFetcher<T> | null>(null);
+  if (!ref.current) ref.current = createDedupedFetcher(load);
+  return ref.current;
+}
+
 interface PantryContextType {
   recipes: Recipe[];
   recipesLoading: boolean;
-  fetchAllRecipes: () => Promise<Recipe[]>;
+  fetchAllRecipes: (opts?: FetchOptions) => Promise<Recipe[]>;
   addRecipe: (Recipe: Recipe) => void;
   updateRecipe: (Recipe: Recipe) => void;
   deleteRecipe: (id: string) => void;
   userSettings: UserSettings;
   updateUserSettings: (settings: UserSettings) => void;
   folders: Folder[];
-  fetchAllFolders: () => void;
+  fetchAllFolders: (opts?: FetchOptions) => Promise<void>;
   addFolder: (folder: Folder) => Promise<void>;
   deleteFolder: (id: string) => void;
   updateFolder: (folder: Folder) => void;
@@ -115,7 +140,7 @@ interface PantryContextType {
 
   // pantry items
   pantryItems: PantryItem[];
-  fetchAllPantryItems: () => void;
+  fetchAllPantryItems: (opts?: FetchOptions) => Promise<PantryItem[]>;
   updatePantryItem: (item: PantryItem) => void;
   updatePantryItems: (items: PantryItem[]) => void;
   addPantryItem: (item: Omit<PantryItem, 'id'>) => void;
@@ -128,7 +153,7 @@ interface PantryContextType {
 
   // shopping List
   shoppingList: ShoppingListItem[];
-  fetchAllShoppingListItems: () => Promise<ShoppingListItem[]>;
+  fetchAllShoppingListItems: (opts?: FetchOptions) => Promise<ShoppingListItem[]>;
   updateShoppingListItem: (item: ShoppingListItem) => Promise<ApiResponse<ShoppingListItem>>;
   addShoppingListItem: (item: Omit<ShoppingListItem, 'id'>) => void;
   removeShoppingListItem?: (id: string) => Promise<ApiResponse<ShoppingListItem | null>>;
@@ -142,7 +167,7 @@ interface PantryContextType {
   // meal plans
   mealPlan: MealPlan[];
   mealPlansLoading: boolean;
-  fetchAllMealPlans: () => Promise<MealPlan[]>;
+  fetchAllMealPlans: (opts?: FetchOptions) => Promise<MealPlan[]>;
   addMealPlan: (mealPlan: MealPlan) => Promise<ApiResponse<MealPlan>>;
   updateMealPlan: (mealPlan: MealPlan) => void;
   deleteMealPlan: (id: string) => void;
@@ -158,24 +183,24 @@ export function PantryProvider({
   children: React.ReactNode;
 }) {
   // meal plan state
-  const [mealPlan, setMealPlan] = useState<MealPlan[]>([]);
+  const [mealPlan, setMealPlan, mealPlanRef] = useRefState<MealPlan[]>([]);
   // ingredient state
-  const [ingredients, setIngredients] = useState<IngredientEntry[]>([]);
+  const [ingredients, setIngredients, ingredientsRef] = useRefState<IngredientEntry[]>([]);
   // folder state
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders, foldersRef] = useRefState<Folder[]>([]);
   // main state
-  const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
+  const [pantryItems, setPantryItems, pantryItemsRef] = useRefState<PantryItem[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const shoppingListRef = useRef<ShoppingListItem[]>([]);
   const shoppingQueueRef = useRef(new Map<string, Promise<unknown>>());
 
-  const commitShoppingList = (updater: (prev: ShoppingListItem[]) => ShoppingListItem[]) => {
+  const commitShoppingList = useCallback((updater: (prev: ShoppingListItem[]) => ShoppingListItem[]) => {
     const next = updater(shoppingListRef.current);
     shoppingListRef.current = next;
     setShoppingList(next);
-  };
+  }, []);
 
-  const enqueueShoppingWrite = <T,>(id: string, task: () => Promise<T>): Promise<T> => {
+  const enqueueShoppingWrite = useCallback(<T,>(id: string, task: () => Promise<T>): Promise<T> => {
     const previous = shoppingQueueRef.current.get(id) ?? Promise.resolve();
     const run = previous.then(task, task);
     shoppingQueueRef.current.set(id, run);
@@ -185,11 +210,56 @@ export function PantryProvider({
       }
     });
     return run;
-  };
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  }, []);
+  const [recipes, setRecipes, recipesRef] = useRefState<Recipe[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
   const [mealPlansLoading, setMealPlansLoading] = useState(false);
   const { isAuthenticated } = useAuth();
+  const { t } = useTranslation();
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const mutationErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notifyMutationError = useCallback((message: string) => {
+    setMutationError(message);
+    if (mutationErrorTimer.current) clearTimeout(mutationErrorTimer.current);
+    mutationErrorTimer.current = setTimeout(() => setMutationError(null), 5000);
+  }, []);
+  useEffect(
+    () => () => {
+      if (mutationErrorTimer.current) clearTimeout(mutationErrorTimer.current);
+    },
+    [],
+  );
+  const tRef = useRef(t);
+  tRef.current = t;
+
+  /**
+   * Runs an optimistic server write. On a thrown error or an unsuccessful response the
+   * caller's rollback restores the previous state and an error toast is shown.
+   */
+  const runOptimisticWrite = useCallback(
+    async (
+      call: () => Promise<ApiResponse<unknown> | undefined>,
+      rollback: () => void,
+      opts: { okCodes?: string[] } = {},
+    ): Promise<boolean> => {
+      try {
+        const res = await call();
+        if (res && res.success === false && !(res.code && opts.okCodes?.includes(res.code))) {
+          rollback();
+          notifyMutationError(res.message || tRef.current('common.saveFailed'));
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error('Write failed:', err);
+        rollback();
+        notifyMutationError(tRef.current('common.saveFailed'));
+        return false;
+      }
+    },
+    [notifyMutationError],
+  );
+
   const [userSettings, setUserSettings] = useState<UserSettings>({
     name: '',
     language: resolveStoredLanguage(),
@@ -216,19 +286,21 @@ export function PantryProvider({
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 
-  const fetchAllFolders = async () => {
+  const foldersFetcher = useDedupedFetcher(async () => {
+    const res = await folderApi.list();
+    if (!res?.success || !res.data) throw new Error('Fetch folders failed');
+    setFolders(unwrapListResponse(res.data, 'folders'));
+  });
+  const fetchAllFolders = useCallback(async (opts?: FetchOptions) => {
     try {
-      const fetchedFoldersResponse = await folderApi.list();
-      if (fetchedFoldersResponse?.success && fetchedFoldersResponse.data) {
-        setFolders(unwrapListResponse(fetchedFoldersResponse.data, 'folders'));
-      }
+      await foldersFetcher.run({ force: opts?.force === true });
     } catch (err) {
       console.error('Fetch folders failed:', err);
     }
-  };
+  }, [foldersFetcher]);
 
 
-  const addFolder = async (folder: Folder) => {
+  const addFolder = useCallback(async (folder: Folder) => {
     const tempFolder: Folder = {
       ...folder
     };
@@ -247,45 +319,54 @@ export function PantryProvider({
             prev.map(f => (f.id === tempFolder.id || f.name === tempFolder.name ? savedFolder : f))
           );
         } else {
-          await fetchAllFolders();
+          await fetchAllFolders({ force: true });
         }
       }
     } catch (err) {
       console.error('Insert folder failed:', err);
       setFolders(prev => prev.filter(f => f.id !== tempFolder.id));
     }
-  };
-  const deleteFolder = (id: string) => {
+  }, [fetchAllFolders, setFolders]);
+  const deleteFolder = useCallback((id: string) => {
+    const snapshot = foldersRef.current;
     setFolders(prev => prev.filter(f => f.id !== id));
-    folderApi.delete(id);
-  };
+    void runOptimisticWrite(() => folderApi.delete(id), () => setFolders(snapshot), { okCodes: ['not_found'] });
+  }, [foldersRef, runOptimisticWrite, setFolders]);
 
-  const updateFolder = (folder: Folder) => {
+  const updateFolder = useCallback((folder: Folder) => {
+    const previous = foldersRef.current.find(f => f.id === folder.id);
     setFolders(prev => prev.map(f => f.id === folder.id ? folder : f));
-    folderApi.update(folder.id, folder);
-  };
+    void runOptimisticWrite(
+      () => folderApi.update(folder.id, folder),
+      () => { if (previous) setFolders(prev => prev.map(f => f.id === previous.id ? previous : f)); },
+    );
+  }, [foldersRef, runOptimisticWrite, setFolders]);
 
 
-  const fetchAllRecipes = async () => {
+  const recipesFetcher = useDedupedFetcher(async () => {
     setRecipesLoading(true);
     try {
-      const fetchedRecipesResponse = await recipeApi.list();
-      if (fetchedRecipesResponse?.success && fetchedRecipesResponse.data) {
-        const data = fetchedRecipesResponse.data as Recipe[] | { recipes?: Recipe[] };
-        const recipesList = unwrapListResponse(data, 'recipes').map(recipe =>
-          normalizeRecipe(recipe as unknown as Record<string, unknown>)
-        );
-        setRecipes(recipesList);
-        return recipesList;
-      }
-    } catch (err) {
-      console.error('Fetch recipes failed:', err);
+      const res = await recipeApi.list();
+      if (!res?.success || !res.data) throw new Error('Fetch recipes failed');
+      const data = res.data as Recipe[] | { recipes?: Recipe[] };
+      const recipesList = unwrapListResponse(data, 'recipes').map(recipe =>
+        normalizeRecipe(recipe as unknown as Record<string, unknown>)
+      );
+      setRecipes(recipesList);
+      return recipesList;
     } finally {
       setRecipesLoading(false);
     }
+  });
+  const fetchAllRecipes = useCallback(async (opts?: FetchOptions): Promise<Recipe[]> => {
+    try {
+      return await recipesFetcher.run({ force: opts?.force === true });
+    } catch (err) {
+      console.error('Fetch recipes failed:', err);
+    }
     return [];
-  }
-  const addRecipe = async (recipe: Recipe) => {
+  }, [recipesFetcher]);
+  const addRecipe = useCallback(async (recipe: Recipe) => {
     // temporary recipe for optimistic UI
     const tempRecipe: Recipe = {
       ...recipe,
@@ -314,45 +395,55 @@ export function PantryProvider({
       // rollback if needed
       setRecipes(prev => prev.filter(r => r.id !== tempRecipe.id));
     }
-  };
-  const updateRecipe = (recipe: Recipe) => {
+  }, [setRecipes]);
+  const updateRecipe = useCallback((recipe: Recipe) => {
     const normalized = {
       ...recipe,
       instructions: normalizeInstructions(recipe.instructions),
       image: normalizeRecipeImage(recipe.image) as Recipe['image'],
     };
     // optimistic update
+    const previous = recipesRef.current.find(r => r.id === recipe.id);
     setRecipes(prev => prev.map(r => r.id === recipe.id ? normalized : r));
 
-    (async () => {
-      try {
-        await recipeApi.update(recipe.id, serializeRecipeForApi(normalized) as Partial<Recipe>);
-      } catch (err) {
-        console.error('Update recipe failed:', err);
-        // rollback by re-fetching recipes to restore consistent state
-        fetchAllRecipes();
-      }
-    })();
-  };
-  const deleteRecipe = (id: string) => {
+    void runOptimisticWrite(
+      () => recipeApi.update(recipe.id, serializeRecipeForApi(normalized) as Partial<Recipe>),
+      () => {
+        if (previous) setRecipes(prev => prev.map(r => r.id === previous.id ? previous : r));
+        else void fetchAllRecipes({ force: true });
+      },
+    );
+  }, [fetchAllRecipes, recipesRef, runOptimisticWrite, setRecipes]);
+  const deleteRecipe = useCallback((id: string) => {
+    const snapshot = recipesRef.current;
     setRecipes(prev => prev.filter(r => r.id !== id));
-    recipeApi.delete(id);
-  };
-  const updateUserSettings = (settings: UserSettings) => {
+    void runOptimisticWrite(() => recipeApi.delete(id), () => setRecipes(snapshot), { okCodes: ['not_found'] });
+  }, [recipesRef, runOptimisticWrite, setRecipes]);
+  const updateUserSettings = useCallback((settings: UserSettings) => {
     setUserSettings(settings);
-  };
+  }, []);
 
-  const fetchAllPantryItems = async () => {
+  const pantryFetcher = useDedupedFetcher(async () => {
+    const res = await PantryItemApi.list();
+    if (!res?.success || !res.data) throw new Error('Fetch pantry items failed');
+    const list = parsePantryItems(res.data);
+    setPantryItems(list);
+    return list;
+  });
+  const fetchAllPantryItems = useCallback(async (opts?: FetchOptions): Promise<PantryItem[]> => {
     try {
-      const fetchedPantryItemsResponse = await PantryItemApi.list();
-      if (fetchedPantryItemsResponse?.success && fetchedPantryItemsResponse.data) {
-        setPantryItems(parsePantryItems(fetchedPantryItemsResponse.data));
-      }
+      return await pantryFetcher.run({ force: opts?.force === true });
     } catch (err) {
       console.error('Fetch pantry items failed:', err);
     }
-  };
-  const addPantryItem = async (item: Omit<PantryItem, 'id'>) => {
+    return [];
+  }, [pantryFetcher]);
+  const inflightPantryAddsRef = useRef(new Set<string>());
+  const addPantryItem = useCallback(async (item: Omit<PantryItem, 'id'>) => {
+    // duplicate-submit guard: an identical add that is still in flight is ignored
+    const submitKey = JSON.stringify(item);
+    if (inflightPantryAddsRef.current.has(submitKey)) return;
+    inflightPantryAddsRef.current.add(submitKey);
     // temporary item for optimistic UI
     const tempItem: PantryItem = {
       ...item,
@@ -381,24 +472,32 @@ export function PantryProvider({
       console.error('Insert pantry item failed:', err);
       // rollback if needed
       setPantryItems(prev => prev.filter(i => i.id !== tempItem.id));
+    } finally {
+      inflightPantryAddsRef.current.delete(submitKey);
     }
-  };
-  const updatePantryItem = (item: PantryItem) => {
+  }, [inflightPantryAddsRef, setPantryItems]);
+  const updatePantryItem = useCallback((item: PantryItem) => {
+    const previous = pantryItemsRef.current.find(i => i.id === item.id);
     setPantryItems(prev => prev.map(i => i.id === item.id ? item : i));
-    PantryItemApi.update(item.id, item);
-  };
-  const updatePantryItems = (items: PantryItem[]) => {
+    void runOptimisticWrite(
+      () => PantryItemApi.update(item.id, item),
+      () => { if (previous) setPantryItems(prev => prev.map(i => i.id === previous.id ? previous : i)); },
+    );
+  }, [pantryItemsRef, runOptimisticWrite, setPantryItems]);
+  const updatePantryItems = useCallback((items: PantryItem[]) => {
+    const snapshot = pantryItemsRef.current;
     setPantryItems(items);
-    PantryItemApi.updateMany(items);
-  };
+    void runOptimisticWrite(() => PantryItemApi.updateMany(items), () => setPantryItems(snapshot));
+  }, [pantryItemsRef, runOptimisticWrite, setPantryItems]);
 
-  const removePantryItem = (id: string) => {
+  const removePantryItem = useCallback((id: string) => {
+    const snapshot = pantryItemsRef.current;
     setPantryItems(prev => prev.filter(i => i.id !== id));
-    PantryItemApi.delete(id);
-  };
+    void runOptimisticWrite(() => PantryItemApi.delete(id), () => setPantryItems(snapshot), { okCodes: ['not_found'] });
+  }, [pantryItemsRef, runOptimisticWrite, setPantryItems]);
 
   // fetch ingredients with optional query
-  const fetchAllIngredients = async (query: string | null) => {
+  const fetchAllIngredients = useCallback(async (query: string | null) => {
     try {
       const fetchedIngredientsResponse = await ingredientApi.list(query || undefined);
       if (fetchedIngredientsResponse?.success && fetchedIngredientsResponse.data) {
@@ -407,27 +506,34 @@ export function PantryProvider({
     } catch (err) {
       console.error('Fetch ingredients failed:', err);
     }
-  };
-  const updateIngredients = (item: IngredientEntry) => {
+  }, [setIngredients]);
+  const updateIngredients = useCallback((item: IngredientEntry) => {
+    const previous = ingredientsRef.current.find(i => i.id === item.id);
     setIngredients(prev => prev.map(i => i.id === item.id ? item : i));
-    ingredientApi.update(item.id, item);
-  };
+    void runOptimisticWrite(
+      () => ingredientApi.update(item.id, item),
+      () => { if (previous) setIngredients(prev => prev.map(i => i.id === previous.id ? previous : i)); },
+    );
+  }, [ingredientsRef, runOptimisticWrite, setIngredients]);
 
   // shopping list item functions
-  const fetchAllShoppingListItems = async () => {
+  const shoppingFetcher = useDedupedFetcher(async () => {
+    const res = await shoppingListApi.list();
+    if (!res || !res.data || !res.success) throw new Error('Fetch shopping list items failed');
+    const fetchedItems = parseShoppingListItems(res.data);
+    commitShoppingList(() => fetchedItems);
+    return fetchedItems;
+  });
+  const fetchAllShoppingListItems = useCallback(async (opts?: FetchOptions): Promise<ShoppingListItem[]> => {
     try {
-      const fetchedItemsResponse = await shoppingListApi.list();
-      if (fetchedItemsResponse && fetchedItemsResponse.data && fetchedItemsResponse.success) {
-        const fetchedItems = parseShoppingListItems(fetchedItemsResponse.data);
-        commitShoppingList(() => fetchedItems);
-        return fetchedItems;
-      }
+      return await shoppingFetcher.run({ force: opts?.force === true });
     } catch (err) {
       console.error('Fetch shopping list items failed:', err);
     }
     return [];
-  };
-  const updateShoppingListItem = (item: ShoppingListItem) => {
+  }, [shoppingFetcher]);
+  const inflightShoppingAddsRef = useRef(new Set<string>());
+  const updateShoppingListItem = useCallback((item: ShoppingListItem) => {
     const baseline = shoppingListRef.current.find((entry) => entry.id === item.id);
     return enqueueShoppingWrite(item.id, async () => {
       const current = shoppingListRef.current.find((entry) => entry.id === item.id) ?? item;
@@ -488,9 +594,13 @@ export function PantryProvider({
       commitShoppingList((prev) => prev.map((entry) => (entry.id === item.id ? current : entry)));
       return response as ApiResponse<ShoppingListItem>;
     });
-  };
+  }, [commitShoppingList, enqueueShoppingWrite]);
 
-  const addShoppingListItem = async (item: Omit<ShoppingListItem, 'id'>) => {
+  const addShoppingListItem = useCallback(async (item: Omit<ShoppingListItem, 'id'>) => {
+    // duplicate-submit guard: an identical add that is still in flight is ignored
+    const submitKey = JSON.stringify(item);
+    if (inflightShoppingAddsRef.current.has(submitKey)) return;
+    inflightShoppingAddsRef.current.add(submitKey);
     // temporary item for optimistic UI
     const tempItem: ShoppingListItem = {
       ...item,
@@ -521,10 +631,11 @@ export function PantryProvider({
       console.error('Insert shopping list item failed:', err);
       // rollback if needed
       commitShoppingList((prev) => prev.filter(i => i.id !== tempItem.id));
+    } finally {
+      inflightShoppingAddsRef.current.delete(submitKey);
     }
-
-  };
-  const removeShoppingListItem = (id: string) => {
+  }, [commitShoppingList, inflightShoppingAddsRef]);
+  const removeShoppingListItem = useCallback((id: string) => {
     return enqueueShoppingWrite(id, async () => {
       const previous = shoppingListRef.current.find((entry) => entry.id === id);
       commitShoppingList((prev) => prev.filter((entry) => entry.id !== id));
@@ -559,9 +670,9 @@ export function PantryProvider({
         return { success: false, message: 'Delete failed' } satisfies ApiResponse<ShoppingListItem | null>;
       }
     });
-  };
+  }, [commitShoppingList, enqueueShoppingWrite]);
 
-  const syncShoppingItemsToPantry = async (
+  const syncShoppingItemsToPantry = useCallback(async (
     items: Array<{ id: string; quantity?: number; unit?: string }>,
   ) => {
     const response = await shoppingListApi.syncToPantry(items);
@@ -574,16 +685,16 @@ export function PantryProvider({
           return synced ? { ...item, ...synced, synced_to_pantry: true } : item;
         }),
       );
-      await fetchAllPantryItems();
+      await fetchAllPantryItems({ force: true });
       return { ...response, data: result };
     }
     return response as ApiResponse<{
       synced: ShoppingListItem[];
       skipped: Array<{ id: string; reason: string }>;
     }>;
-  };
+  }, [commitShoppingList, fetchAllPantryItems]);
 
-  const unsyncShoppingItemsFromPantry = async (itemIds: string[]) => {
+  const unsyncShoppingItemsFromPantry = useCallback(async (itemIds: string[]) => {
     const response = await shoppingListApi.unsyncFromPantry(itemIds);
     if (response.success && response.data) {
       const result = parseUnsyncResult(response.data);
@@ -596,36 +707,40 @@ export function PantryProvider({
             : item;
         }),
       );
-      await fetchAllPantryItems();
+      await fetchAllPantryItems({ force: true });
       return { ...response, data: result };
     }
     return response as ApiResponse<{
       unsynced: ShoppingListItem[];
       skipped: Array<{ id: string; reason: string }>;
     }>;
-  };
+  }, [commitShoppingList, fetchAllPantryItems]);
 
   // meal plan functions
-  const fetchAllMealPlans = async () => {
+  const mealPlansFetcher = useDedupedFetcher(async () => {
     setMealPlansLoading(true);
     try {
-      const fetchedMealPlansResponse = await mealPlanApi.list();
-      if (fetchedMealPlansResponse?.success && fetchedMealPlansResponse.data) {
-        const data = fetchedMealPlansResponse.data as MealPlan[] | { mealPlans?: MealPlan[] };
-        const mealPlansList = unwrapListResponse(data, 'mealPlans').map(plan =>
-          normalizeMealPlan(plan as unknown as Record<string, unknown>)
-        );
-        setMealPlan(mealPlansList);
-        return mealPlansList;
-      }
-    } catch (err) {
-      console.error('Fetch meal plans failed:', err);
+      const res = await mealPlanApi.list();
+      if (!res?.success || !res.data) throw new Error('Fetch meal plans failed');
+      const data = res.data as MealPlan[] | { mealPlans?: MealPlan[] };
+      const mealPlansList = unwrapListResponse(data, 'mealPlans').map(plan =>
+        normalizeMealPlan(plan as unknown as Record<string, unknown>)
+      );
+      setMealPlan(mealPlansList);
+      return mealPlansList;
     } finally {
       setMealPlansLoading(false);
     }
+  });
+  const fetchAllMealPlans = useCallback(async (opts?: FetchOptions): Promise<MealPlan[]> => {
+    try {
+      return await mealPlansFetcher.run({ force: opts?.force === true });
+    } catch (err) {
+      console.error('Fetch meal plans failed:', err);
+    }
     return [];
-  };
-  const addMealPlan = async (mealPlan: MealPlan): Promise<ApiResponse<MealPlan>> => {
+  }, [mealPlansFetcher]);
+  const addMealPlan = useCallback(async (mealPlan: MealPlan): Promise<ApiResponse<MealPlan>> => {
     // temporary meal plan for optimistic UI
     const tempMealPlan: MealPlan = {
       ...mealPlan,
@@ -656,17 +771,22 @@ export function PantryProvider({
       setMealPlan(prev => prev.filter(m => m.id !== tempMealPlan.id));
       return { success: false } as ApiResponse<MealPlan>;
     }
-  };
-  const updateMealPlan = (mealPlan: MealPlan) => {
+  }, [setMealPlan]);
+  const updateMealPlan = useCallback((mealPlan: MealPlan) => {
+    const previous = mealPlanRef.current.find(m => m.id === mealPlan.id);
     setMealPlan(prev => prev.map(m => m.id === mealPlan.id ? mealPlan : m));
-    mealPlanApi.update(mealPlan.id, mealPlan);
-  };
-  const deleteMealPlan = (id: string) => {
+    void runOptimisticWrite(
+      () => mealPlanApi.update(mealPlan.id, mealPlan),
+      () => { if (previous) setMealPlan(prev => prev.map(m => m.id === previous.id ? previous : m)); },
+    );
+  }, [mealPlanRef, runOptimisticWrite, setMealPlan]);
+  const deleteMealPlan = useCallback((id: string) => {
+    const snapshot = mealPlanRef.current;
     setMealPlan(prev => prev.filter(m => m.id !== id));
-    mealPlanApi.delete(id);
-  };
+    void runOptimisticWrite(() => mealPlanApi.delete(id), () => setMealPlan(snapshot), { okCodes: ['not_found'] });
+  }, [mealPlanRef, runOptimisticWrite, setMealPlan]);
 
-  const confirmMealPlan = async (id: string): Promise<ApiResponse<ConfirmMealPlanResult>> => {
+  const confirmMealPlan = useCallback(async (id: string): Promise<ApiResponse<ConfirmMealPlanResult>> => {
     try {
       const response = await mealPlanApi.confirm(id);
       if (response.success && response.data) {
@@ -674,16 +794,16 @@ export function PantryProvider({
           (response.data.mealPlan ?? response.data) as unknown as Record<string, unknown>
         );
         setMealPlan(prev => prev.map(m => (m.id === id ? confirmed : m)));
-        await fetchAllPantryItems();
+        await fetchAllPantryItems({ force: true });
       }
       return response as ApiResponse<ConfirmMealPlanResult>;
     } catch (err) {
       console.error('Confirm meal plan failed:', err);
       return { success: false } as ApiResponse<ConfirmMealPlanResult>;
     }
-  };
+  }, [fetchAllPantryItems, setMealPlan]);
 
-  const skipMealPlan = async (id: string): Promise<ApiResponse<{ mealPlan: MealPlan; alreadySkipped: boolean }>> => {
+  const skipMealPlan = useCallback(async (id: string): Promise<ApiResponse<{ mealPlan: MealPlan; alreadySkipped: boolean }>> => {
     try {
       const response = await mealPlanApi.skip(id);
       if (response.success && response.data) {
@@ -697,9 +817,9 @@ export function PantryProvider({
       console.error('Skip meal plan failed:', err);
       return { success: false } as ApiResponse<{ mealPlan: MealPlan; alreadySkipped: boolean }>;
     }
-  };
+  }, [setMealPlan]);
 
-  const fetchPendingConfirmations = async (): Promise<MealPlan[]> => {
+  const fetchPendingConfirmations = useCallback(async (): Promise<MealPlan[]> => {
     try {
       const response = await mealPlanApi.pendingConfirm();
       if (response.success && response.data) {
@@ -710,9 +830,18 @@ export function PantryProvider({
       console.error('Fetch pending confirmations failed:', err);
     }
     return [];
-  };
+  }, []);
 
-  return <PantryContext.Provider value={{
+  // Cached lists belong to one session: never serve them to the next user.
+  useEffect(() => {
+    foldersFetcher.invalidate();
+    recipesFetcher.invalidate();
+    pantryFetcher.invalidate();
+    shoppingFetcher.invalidate();
+    mealPlansFetcher.invalidate();
+  }, [isAuthenticated, foldersFetcher, recipesFetcher, pantryFetcher, shoppingFetcher, mealPlansFetcher]);
+
+  const value = useMemo<PantryContextType>(() => ({
     recipes,
     recipesLoading,
     pantryItems,
@@ -750,9 +879,58 @@ export function PantryProvider({
     confirmMealPlan,
     skipMealPlan,
     fetchPendingConfirmations,
-    updateIngredients
-  }}>
+    updateIngredients,
+  }), [
+    recipes,
+    recipesLoading,
+    pantryItems,
+    shoppingList,
+    addRecipe,
+    fetchAllRecipes,
+    updateRecipe,
+    deleteRecipe,
+    userSettings,
+    updateUserSettings,
+    folders,
+    fetchAllFolders,
+    addFolder,
+    deleteFolder,
+    updateFolder,
+    fetchAllPantryItems,
+    updatePantryItem,
+    updatePantryItems,
+    addPantryItem,
+    removePantryItem,
+    fetchAllIngredients,
+    ingredients,
+    fetchAllShoppingListItems,
+    updateShoppingListItem,
+    addShoppingListItem,
+    removeShoppingListItem,
+    syncShoppingItemsToPantry,
+    unsyncShoppingItemsFromPantry,
+    mealPlan,
+    mealPlansLoading,
+    fetchAllMealPlans,
+    addMealPlan,
+    updateMealPlan,
+    deleteMealPlan,
+    confirmMealPlan,
+    skipMealPlan,
+    fetchPendingConfirmations,
+    updateIngredients,
+  ]);
+
+  return <PantryContext.Provider value={value}>
     {children}
+    {mutationError && (
+      <div
+        role="alert"
+        className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-lg bg-ink px-4 py-2 text-sm text-surface shadow-lg"
+      >
+        {mutationError}
+      </div>
+    )}
   </PantryContext.Provider>;
 }
 export function usePantry() {
