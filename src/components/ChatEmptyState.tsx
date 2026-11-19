@@ -71,7 +71,7 @@ export function ChatEmptyState({
 
   return (
     <div className="h-full min-h-[14rem] flex flex-col items-center justify-center px-6 py-6 text-center">
-      <h2 className="font-display text-3xl sm:text-4xl font-semibold text-ink tracking-tight">
+      <h2 className="font-display text-2xl sm:text-4xl font-semibold text-ink tracking-tight">
         {headline}
       </h2>
 
