@@ -11,6 +11,7 @@ const KNOWN_TOOLS = new Set([
   'addRecipeToMenu',
   'planMeals',
   'updatePreferences',
+  'getPreferences',
 ]);
 
 /** i18n key for a tool's card title; unknown tools fall back to a generic title. */

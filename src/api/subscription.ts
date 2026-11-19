@@ -46,6 +46,13 @@ export interface PlansResponse {
   stripeCheckoutEnabled: boolean;
 }
 
+export interface ConfirmCheckoutResult {
+  activated: boolean;
+  isPro: boolean;
+  isTrial: boolean;
+  status: string;
+}
+
 export type CheckoutStartResult =
   | { kind: 'checkout'; checkoutUrl: string }
   | { kind: 'portal'; portalUrl: string };
@@ -102,6 +109,15 @@ export const subscriptionApi = {
       return { kind: 'checkout', checkoutUrl: response.data.checkoutUrl };
     }
     throw new Error(response.message ?? 'Unable to start checkout');
+  },
+
+  /**
+   * Server-side verification of the Stripe Checkout Session we returned from. Activates Pro
+   * even when the webhook is late / missing (idempotent).
+   */
+  confirmCheckout: async (sessionId: string): Promise<ConfirmCheckoutResult> => {
+    const response = await api.post<ConfirmCheckoutResult>('/api/subscription/confirm', { sessionId });
+    return unwrap(response);
   },
 
   createPortal: async (): Promise<{ portalUrl: string }> => {
