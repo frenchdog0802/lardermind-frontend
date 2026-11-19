@@ -242,7 +242,7 @@
     "pickerUnavailable": "無法開啟相片選擇器，請再試一次或換個瀏覽器。",
     "upgradeRequired": "照片掃描已達方案上限，升級 Pro 可使用更多次數。",
     "signInRequired": "請使用完整帳號登入後再掃描食材。",
-    "attach": "用照片加入庫存",
+    "attach": "加入冰箱、食材或收據的照片",
     "takePhoto": "拍照",
     "chooseLibrary": "從相簿選擇",
     "pickSource": "用照片加入食材",
@@ -257,7 +257,8 @@
     "successBody": "已將 {{count}} 項加入庫存。",
     "errorTitle": "辨識失敗",
     "errorRecognize": "圖片辨識失敗，請再試一次。",
-    "errorApply": "無法更新庫存，請再試一次。"
+    "errorApply": "無法更新庫存，請再試一次。",
+    "attachTooltip": "加入照片"
   },
   "shopping": {
     "title": "購物清單",
@@ -439,7 +440,9 @@
     "recipeAlreadyToday": "已排入今天晚餐",
     "openPantry": "開啟食材庫存",
     "openCalendar": "開啟行事曆",
-    "addedToTodayDinner": "已加入今日晚餐（{{date}}）。開啟行事曆即可查看 —— 也已歸類在「晚餐」。"
+    "addedToTodayDinner": "已加入今日晚餐（{{date}}）。開啟行事曆即可查看 —— 也已歸類在「晚餐」。",
+    "snapFridge": "拍下你的冰箱",
+    "composerHint": "輸入文字，或加入冰箱照片"
   },
   "setupGuide": {
     "title": "設定指南",
@@ -517,7 +520,8 @@
       "step2Alt": "檯面上的新鮮蔬菜與食材",
       "step3Title": "自動採買清單",
       "step3Body": "只買缺少的食材。一份整理好的清單，方便你每週採買。",
-      "step3Alt": "市場裡的新鮮蔬果"
+      "step3Alt": "市場裡的新鮮蔬果",
+      "photoLine": "拍一張冰箱照片，LarderMind 會辨識你有哪些食材。"
     },
     "faq": {
       "title": "常見問題",

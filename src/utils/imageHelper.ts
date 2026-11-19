@@ -1,9 +1,10 @@
 // src/api/imageHelper.ts
 import imageCompression from "browser-image-compression";
 
-export async function compressImage(file: File, maxSizeMB = 0.5) {
+export async function compressImage(file: File, maxSizeMB = 0.5, fileType?: string) {
     const options = {
         maxSizeMB,
+        ...(fileType ? { fileType } : {}),
         maxWidthOrHeight: 1200,
         useWebWorker: true,
     };

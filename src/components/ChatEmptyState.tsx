@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { CameraIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/authContext';
 import { usePantry } from '../contexts/pantryContext';
@@ -17,6 +18,9 @@ interface ChatEmptyStateProps {
   onSelectPrompt?: (prompt: string) => void;
   onViewPantry?: () => void;
   onViewShoppingList?: () => void;
+  /** Opens the photo picker (fridge / groceries / receipt recognition). */
+  onSnapFridge?: () => void;
+  snapDisabled?: boolean;
 }
 
 export function ChatEmptyState({
@@ -25,6 +29,8 @@ export function ChatEmptyState({
   onSelectPrompt,
   onViewPantry,
   onViewShoppingList,
+  onSnapFridge,
+  snapDisabled = false,
 }: ChatEmptyStateProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -74,6 +80,19 @@ export function ChatEmptyState({
       <h2 className="font-display text-3xl sm:text-4xl font-semibold text-ink tracking-tight">
         {headline}
       </h2>
+
+      {onSnapFridge ? (
+        <button
+          type="button"
+          onClick={onSnapFridge}
+          disabled={snapDisabled}
+          data-testid="snap-fridge"
+          className="mt-5 inline-flex items-center gap-2 rounded-full bg-herb px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-herb-deep disabled:opacity-60 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-herb"
+        >
+          <CameraIcon size={20} aria-hidden="true" />
+          {t('ai.snapFridge')}
+        </button>
+      ) : null}
 
       {showChips ? (
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">

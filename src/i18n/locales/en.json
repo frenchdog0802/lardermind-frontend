@@ -243,7 +243,7 @@
     "pickerUnavailable": "Could not open the photo picker. Try again or use a different browser.",
     "upgradeRequired": "Photo scanning has reached your plan limit. Upgrade to Pro for more scans.",
     "signInRequired": "Sign in with a full account to scan groceries.",
-    "attach": "Add pantry items from photo",
+    "attach": "Add a photo of your fridge, groceries or receipt",
     "takePhoto": "Take photo",
     "chooseLibrary": "Choose from library",
     "pickSource": "Add ingredients from a photo",
@@ -258,7 +258,8 @@
     "successBody": "Added {{count}} item(s) to your pantry.",
     "errorTitle": "Couldn't recognize",
     "errorRecognize": "Image recognition failed. Please try again.",
-    "errorApply": "Couldn't update pantry. Please try again."
+    "errorApply": "Couldn't update pantry. Please try again.",
+    "attachTooltip": "Add a photo"
   },
   "shopping": {
     "title": "Shopping List",
@@ -442,7 +443,9 @@
     "recipeAlreadyToday": "Already on today's dinner",
     "openPantry": "Open Pantry",
     "openCalendar": "Open Calendar",
-    "addedToTodayDinner": "Added to today's dinner ({{date}}). Open Calendar to see it — also filed under Dinner."
+    "addedToTodayDinner": "Added to today's dinner ({{date}}). Open Calendar to see it — also filed under Dinner.",
+    "snapFridge": "Snap your fridge",
+    "composerHint": "Type or add a photo of your fridge"
   },
   "setupGuide": {
     "title": "Setup guide",
@@ -520,7 +523,8 @@
       "step2Alt": "Fresh vegetables and ingredients on a counter",
       "step3Title": "Auto grocery list",
       "step3Body": "Only buy what you're missing. One sorted list, ready for your weekly shop.",
-      "step3Alt": "Fresh produce at a market"
+      "step3Alt": "Fresh produce at a market",
+      "photoLine": "Snap a photo of your fridge — LarderMind recognises what you have."
     },
     "faq": {
       "title": "FAQ",

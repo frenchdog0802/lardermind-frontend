@@ -16,10 +16,19 @@ describe('chat language tag', () => {
     assert.equal(chatLanguageTag('en-US'), 'en');
   });
 
+  it('passes es / fr / de / ja through, including locale tags', () => {
+    assert.equal(chatLanguageTag('es'), 'es');
+    assert.equal(chatLanguageTag('es-MX'), 'es');
+    assert.equal(chatLanguageTag('fr-CA'), 'fr');
+    assert.equal(chatLanguageTag('DE'), 'de');
+    assert.equal(chatLanguageTag('ja-JP'), 'ja');
+  });
+
   it('omits the field when the language is unknown', () => {
     assert.equal(chatLanguageTag(undefined), undefined);
     assert.equal(chatLanguageTag(''), undefined);
-    assert.equal(chatLanguageTag('fr'), undefined);
+    assert.equal(chatLanguageTag('it'), undefined);
+    assert.equal(chatLanguageTag('pt-BR'), undefined);
   });
 
   it('is sent on send, stream and resume requests', () => {

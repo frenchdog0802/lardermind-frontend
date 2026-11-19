@@ -38,6 +38,7 @@ import { AppHeader } from './AppHeader';
 import { ChatEmptyState, SuggestedPromptCard } from './ChatEmptyState';
 import { Loading } from './Loading';
 import { PantryImageReviewModal } from './PantryImageReviewModal';
+import { describeVisionFailure, prepareVisionImage, VISION_ACCEPT } from '../utils/pantryVisionPicker';
 import {
   resolveChatBodyMode,
   resolveChatHeaderIsNewChat,
@@ -1002,15 +1003,22 @@ export function AICookingAssistant({
       e.target.value = '';
       if (!file) return;
 
-      const previewUrl = URL.createObjectURL(file);
       setRecognizing(true);
       setRecognizeError(null);
+      let previewUrl = '';
       try {
-        const res = await pantryVisionApi.recognize(file);
+        const prepared = await prepareVisionImage(file);
+        previewUrl = URL.createObjectURL(prepared);
+        const res = await pantryVisionApi.recognize(prepared);
         if (!res.success || !res.data) {
           URL.revokeObjectURL(previewUrl);
+          const failure = describeVisionFailure(res);
           setRecognizeError(
-            res.message || t('pantryVision.errorRecognize'),
+            failure === 'upgrade'
+              ? t('pantryVision.upgradeRequired')
+              : failure === 'sign_in'
+                ? t('pantryVision.signInRequired')
+                : res.message || t('pantryVision.errorRecognize'),
           );
           return;
         }
@@ -1019,7 +1027,7 @@ export function AICookingAssistant({
         setReviewPreviewUrl(previewUrl);
         setReviewOpen(true);
       } catch {
-        URL.revokeObjectURL(previewUrl);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
         setRecognizeError(t('pantryVision.errorRecognize'));
       } finally {
         setRecognizing(false);
@@ -1033,8 +1041,11 @@ export function AICookingAssistant({
       <input
         ref={attachInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
-        className="hidden"
+        accept={VISION_ACCEPT}
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        data-testid="chat-photo-input"
         onChange={(e) => {
           void handleAttachFileChange(e);
         }}
@@ -1055,6 +1066,8 @@ export function AICookingAssistant({
         attachDisabled={Boolean(pendingApproval)}
         attaching={recognizing}
         attachAriaLabel={t('pantryVision.attach')}
+        attachTitle={t('pantryVision.attachTooltip')}
+        placeholder={t('ai.composerHint')}
       />
       <PantryImageReviewModal
         open={reviewOpen}
@@ -1096,6 +1109,8 @@ export function AICookingAssistant({
               onSelectPrompt={setInputValue}
               onViewPantry={onViewPantry}
               onViewShoppingList={onViewShoppingList}
+              onSnapFridge={handleAttachPantryImage}
+              snapDisabled={recognizing || isTyping || Boolean(pendingApproval)}
             />
             <div className="mt-8 w-full">{composerField}</div>
           </div>
