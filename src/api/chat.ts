@@ -1,4 +1,6 @@
+import i18n from 'i18next';
 import { api } from './client';
+import { chatLanguageTag } from './chatLanguage';
 
 export type ChatResponseType =
     | 'text'
@@ -19,6 +21,8 @@ export interface ChatRequest {
     sessionId?: string;
     /** Device local calendar date YYYY-MM-DD for agent “today”. */
     clientLocalDate?: string;
+    /** App language ('zh-TW' | 'en'); omitted when unknown. Lets the assistant keep the language on short replies. */
+    language?: string;
     recipeContext?: {
         recipeId: string;
         recipeName: string;
@@ -33,11 +37,18 @@ function localCalendarDate(): string {
     return `${y}-${m}-${day}`;
 }
 
-function withClientLocalDate(data: ChatRequest): ChatRequest {
+function withClientContext(data: ChatRequest): ChatRequest {
+    const language = data.language ?? chatLanguageTag(i18n.language);
     return {
         ...data,
         clientLocalDate: data.clientLocalDate ?? localCalendarDate(),
+        ...(language ? { language } : {}),
     };
+}
+
+function withResumeContext(data: ChatResumeRequest): ChatResumeRequest {
+    const language = data.language ?? chatLanguageTag(i18n.language);
+    return language ? { ...data, language } : data;
 }
 
 export interface ChatResumeRequest {
@@ -46,6 +57,8 @@ export interface ChatResumeRequest {
     note?: string;
     /** Id of the approval card the user is looking at. Omit to act on the current pending action. */
     interruptId?: string;
+    /** App language ('zh-TW' | 'en'); omitted when unknown. */
+    language?: string;
 }
 
 export interface ChatResponse {
@@ -313,16 +326,16 @@ export const chatApi = {
         auth?.bearerToken
             ? chatFetchJson<ChatResponse>('/api/chat/send', {
                   method: 'POST',
-                  body: JSON.stringify(withClientLocalDate(data)),
+                  body: JSON.stringify(withClientContext(data)),
               }, auth)
-            : api.post<ChatResponse>('/api/chat/send', withClientLocalDate(data)),
+            : api.post<ChatResponse>('/api/chat/send', withClientContext(data)),
     resume: (data: ChatResumeRequest, auth?: ChatAuthOptions) =>
         auth?.bearerToken
             ? chatFetchJson<ChatResponse>('/api/chat/resume', {
                   method: 'POST',
-                  body: JSON.stringify(data),
+                  body: JSON.stringify(withResumeContext(data)),
               }, auth)
-            : api.post<ChatResponse>('/api/chat/resume', data),
+            : api.post<ChatResponse>('/api/chat/resume', withResumeContext(data)),
     streamSend: async (
         data: ChatRequest,
         handlers: StreamSendHandlers,
@@ -337,7 +350,7 @@ export const chatApi = {
                 Accept: 'text/event-stream',
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify(withClientLocalDate(data)),
+            body: JSON.stringify(withClientContext(data)),
             signal,
         });
 

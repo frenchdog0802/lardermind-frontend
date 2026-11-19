@@ -21,7 +21,7 @@ describe('web chat clientLocalDate', () => {
   it('attaches device local calendar date on send and stream', () => {
     const src = readFileSync(join(root, 'src/api/chat.ts'), 'utf8');
     assert.match(src, /function localCalendarDate\(/);
-    assert.match(src, /withClientLocalDate\(data\)/);
+    assert.match(src, /withClientContext\(data\)/);
     assert.match(src, /clientLocalDate/);
   });
 });
