@@ -274,7 +274,7 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
                     showToast(t('shopping.allPurchased', { count: unchecked.length }));
                 }
             } else {
-                await fetchAllShoppingListItems();
+                await fetchAllShoppingListItems({ force: true });
                 const conflict = results.some(res => res.code === 'version_conflict');
                 showToast(conflict ? t('shopping.versionConflict') : t('shopping.completeFailed'));
             }
@@ -305,9 +305,10 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
             if (res.success && res.data) {
                 // Undo fully reverts the check-off so the item returns to Items to Buy.
                 // (The server also removes / restores the pantry row it touched.)
-                for (const restored of res.data.unsynced) {
-                    await updateShoppingListItem({ ...restored, checked: false });
-                }
+                // Per-id ordering is serialised by the context's write queue, so ids can go in parallel.
+                await Promise.all(
+                    res.data.unsynced.map(restored => updateShoppingListItem({ ...restored, checked: false })),
+                );
             }
         } finally {
             setInFlightIds(prev => prev.filter(x => !ids.includes(x)));

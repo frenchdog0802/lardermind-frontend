@@ -4,13 +4,15 @@
   useRef,
   useMemo,
   useCallback,
+  useSyncExternalStore,
   type ChangeEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { splitInstructionSteps } from '../utils/recipeSteps';
 import { ShoppingCartIcon, ChevronRightIcon, XIcon, PlusCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
-import { chatApi, ChatResponse, ChatSession, HistoryMessage, PendingToolSummary } from '../api/chat';
+import { chatSessionsStore } from '../utils/chatSessionsStore';
+import { chatApi, ChatResponse, HistoryMessage, PendingToolSummary } from '../api/chat';
 import { classifyChatResume, readInterruptId } from '../api/resumeOutcome';
 import { mealPlanApi } from '../api/mealPlan';
 import {
@@ -180,7 +182,7 @@ export function AICookingAssistant({
   const [suggestedRecipes, setSuggestedRecipes] = useState<RecipeSuggestion[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeSuggestion | null>(null);
   const [addingToMenuRecipeId, setAddingToMenuRecipeId] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const sessions = useSyncExternalStore(chatSessionsStore.subscribe, chatSessionsStore.getSnapshot);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [pendingApproval, setPendingApproval] = useState<{
@@ -223,9 +225,7 @@ export function AICookingAssistant({
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        const sessionsRes = await chatApi.listSessions();
-        const list = sessionsRes.data?.sessions ?? [];
-        setSessions(list);
+        const list = await chatSessionsStore.fetch();
         const initialId =
           list.find((s) => s.isDefault)?.id ?? list[0]?.id ?? null;
         setActiveSessionId(initialId);
@@ -339,8 +339,7 @@ export function AICookingAssistant({
   };
 
   const refreshSessions = async () => {
-    const sessionsRes = await chatApi.listSessions();
-    setSessions(sessionsRes.data?.sessions ?? []);
+    await chatSessionsStore.fetch({ force: true });
   };
 
   // Scroll to bottom of messages (only while the chat tab is visible)
@@ -410,16 +409,16 @@ export function AICookingAssistant({
   const refreshAfterAgentAction = async (type: MessageType) => {
     const tasks: Promise<unknown>[] = [];
     if (['recipe_created', 'recipe_imported', 'recipe_updated', 'meal_suggestions', 'multi_action', 'action_result'].includes(type)) {
-      tasks.push(fetchAllRecipes());
+      tasks.push(fetchAllRecipes({ force: true }));
     }
     if (['meal_plan_updated', 'meal_suggestions', 'multi_action', 'action_result'].includes(type)) {
-      tasks.push(fetchAllMealPlans());
+      tasks.push(fetchAllMealPlans({ force: true }));
     }
     if (['pantry_updated', 'meal_suggestions', 'multi_action', 'action_result'].includes(type)) {
-      tasks.push(Promise.resolve(fetchAllPantryItems()));
+      tasks.push(fetchAllPantryItems({ force: true }));
     }
     if (['shopping_list_updated', 'meal_plan_updated', 'multi_action', 'action_result'].includes(type)) {
-      tasks.push(fetchAllShoppingListItems());
+      tasks.push(fetchAllShoppingListItems({ force: true }));
     }
     await Promise.all(tasks);
   };
@@ -436,7 +435,7 @@ export function AICookingAssistant({
       if (!response.success) {
         throw new Error(response.message || "Failed to add recipe to today's dinner");
       }
-      await Promise.all([fetchAllMealPlans(), fetchAllRecipes()]);
+      await Promise.all([fetchAllMealPlans({ force: true }), fetchAllRecipes({ force: true })]);
       const confirmationMessage: Message = {
         id: `confirmation-${Date.now()}`,
         role: 'assistant',
@@ -707,7 +706,7 @@ export function AICookingAssistant({
             }
           },
           onSessionTitle: ({ sessionId, title }) => {
-            setSessions((prev) => {
+            chatSessionsStore.update((prev) => {
               const idx = prev.findIndex((s) => s.id === sessionId);
               if (idx === -1) {
                 return [
@@ -1052,7 +1051,7 @@ export function AICookingAssistant({
         emptyMessage={reviewEmptyMessage}
         onClose={closeReviewModal}
         onApplied={() => {
-          void fetchAllPantryItems();
+          void fetchAllPantryItems({ force: true });
         }}
       />
     </>

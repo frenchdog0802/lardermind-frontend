@@ -12,9 +12,10 @@ export const mealPlanApi = {
     pendingConfirm: () =>
         api.get<{ mealPlans?: MealPlan[] } | MealPlan[]>('/api/meal-plan/pending-confirm'),
 
-    availability: (from: string, to: string) =>
+    availability: (from: string, to: string, init?: { signal?: AbortSignal }) =>
         api.get<MealPlanAvailabilityResult>(
-            `/api/meal-plan/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+            `/api/meal-plan/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+            init,
         ),
 
     create: (data: Partial<MealPlan>) => api.post<MealPlan | { mealPlan?: MealPlan }>('/api/meal-plan', data),

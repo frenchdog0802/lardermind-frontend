@@ -685,7 +685,9 @@ export function PantryProvider({
           return synced ? { ...item, ...synced, synced_to_pantry: true } : item;
         }),
       );
-      await fetchAllPantryItems({ force: true });
+      // The sync/unsync response does not carry pantry rows, so refresh them, but do not
+      // make the caller (toast, Undo) wait for it.
+      void fetchAllPantryItems({ force: true });
       return { ...response, data: result };
     }
     return response as ApiResponse<{
@@ -707,7 +709,9 @@ export function PantryProvider({
             : item;
         }),
       );
-      await fetchAllPantryItems({ force: true });
+      // The sync/unsync response does not carry pantry rows, so refresh them, but do not
+      // make the caller (toast, Undo) wait for it.
+      void fetchAllPantryItems({ force: true });
       return { ...response, data: result };
     }
     return response as ApiResponse<{

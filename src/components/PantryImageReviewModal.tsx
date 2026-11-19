@@ -77,7 +77,7 @@ export function PantryImageReviewModal({
         setError(res.message || t('pantryVision.errorApply'));
         return;
       }
-      await fetchAllPantryItems();
+      await fetchAllPantryItems({ force: true });
       onApplied?.();
       onClose();
     } catch {

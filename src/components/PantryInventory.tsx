@@ -424,7 +424,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                         emptyMessage={reviewEmptyMessage}
                         onClose={closeReviewModal}
                         onApplied={() => {
-                            void fetchAllPantryItems();
+                            void fetchAllPantryItems({ force: true });
                         }}
                     />
 

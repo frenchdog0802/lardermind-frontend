@@ -8,7 +8,7 @@ import {
   XIcon,
 } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
-import { chatApi } from '../api/chat';
+import { chatSessionsStore } from '../utils/chatSessionsStore';
 import type { AppDrawerView } from './AppDrawer';
 import {
   SETUP_GUIDE_STEP_ORDER,
@@ -39,8 +39,7 @@ export function SetupGuide({ onNavigate, onAskAi }: SetupGuideProps) {
       return;
     }
     try {
-      const res = await chatApi.listSessions();
-      const sessions = res.data?.sessions ?? [];
+      const sessions = await chatSessionsStore.fetch();
       const started = sessions.some((s) => Boolean(s.title?.trim()));
       if (started) {
         markSetupGuideChatStarted();

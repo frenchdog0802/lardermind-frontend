@@ -57,3 +57,29 @@ export function shortageRangeLabel(
   }
   return fmt.range(fmt.short(parseLocalDate(from), false), fmt.short(parseLocalDate(to), false));
 }
+
+/** Index meal plans by `serving_date` (input order is preserved within each day). */
+export function groupMealPlansByDate<T extends { serving_date: string }>(
+  plans: readonly T[],
+): Map<string, T[]> {
+  const byDate = new Map<string, T[]>();
+  for (const plan of plans) {
+    const list = byDate.get(plan.serving_date);
+    if (list) list.push(plan);
+    else byDate.set(plan.serving_date, [plan]);
+  }
+  return byDate;
+}
+
+/** Which meal types a day has, in a single pass. */
+export function mealTypePresence(
+  dayMeals: ReadonlyArray<{ meal_type?: string }>,
+): Record<'breakfast' | 'lunch' | 'dinner' | 'snack', boolean> {
+  const presence = { breakfast: false, lunch: false, dinner: false, snack: false };
+  for (const meal of dayMeals) {
+    if (meal.meal_type && meal.meal_type in presence) {
+      presence[meal.meal_type as keyof typeof presence] = true;
+    }
+  }
+  return presence;
+}

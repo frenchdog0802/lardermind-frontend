@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { splitInstructionSteps } from '../utils/recipeSteps';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeftIcon, ChevronRightIcon, CheckIcon, PackageIcon, ImageIcon, PlusIcon, TrashIcon, XIcon, AlertCircleIcon, SearchIcon, ChevronDownIcon, CalendarIcon, ListIcon, MoreHorizontalIcon, ChevronUpIcon, ShoppingCartIcon } from 'lucide-react';
@@ -17,6 +17,8 @@ import { AppHeader } from './AppHeader';
 import { dateLocale } from '../i18n';
 import {
   defaultExpandedDay,
+  groupMealPlansByDate,
+  mealTypePresence,
   parseLocalDate,
   relativeDayKey,
   shortageRangeLabel,
@@ -54,10 +56,19 @@ export function Calendar({
     addShoppingListItem,
     shoppingList,
   } = usePantry();
-  const [recipes, setRecipes] = useState<Recipe[]>(contextRecipes);
+  // Recipes fetched on demand for a meal plan whose recipe is not in the context list.
+  const [extraRecipes, setExtraRecipes] = useState<Recipe[]>([]);
+  const recipes = useMemo(
+    () =>
+      extraRecipes.length
+        ? [...contextRecipes, ...extraRecipes.filter((r) => !contextRecipes.some((c) => c.id === r.id))]
+        : contextRecipes,
+    [contextRecipes, extraRecipes],
+  );
   const [showRecipeDetailModal, setShowRecipeDetailModal] = useState(false);
   const [selectedRecipeForDetail, setSelectedRecipeForDetail] = useState<Recipe | null>(null);
-  const [mealPlans, setMealPlans] = useState<MealPlan[]>(contextMealPlans);
+  // The context list is the single source of truth (its actions update it optimistically).
+  const mealPlans = contextMealPlans;
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showAddRecipeModal, setShowAddRecipeModal] = useState(false);
@@ -86,6 +97,11 @@ export function Calendar({
     defaultExpandedDay(startOfWeekLocal(new Date())),
   ]);
   const [showItemActions, setShowItemActions] = useState<string | null>(null);
+  // Evaluate today once per render instead of per grid cell.
+  const todayParts = (() => {
+    const now = new Date();
+    return { date: now.getDate(), month: now.getMonth(), year: now.getFullYear() };
+  })();
   // Get current month and year
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
@@ -103,37 +119,23 @@ export function Calendar({
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
   const isInitialLoading = (mealPlansLoading || recipesLoading) && mealPlans.length === 0 && recipes.length === 0;
   useEffect(() => {
-    if (contextMealPlans.length > 0) {
-      setMealPlans(contextMealPlans);
-    }
-  }, [contextMealPlans]);
-  useEffect(() => {
-    if (contextRecipes.length > 0) {
-      setRecipes(contextRecipes);
-    }
-  }, [contextRecipes]);
-  useEffect(() => {
-    const loadCalendarData = async () => {
-      const [plans, fetchedRecipes] = await Promise.all([
-        fetchAllMealPlans(),
-        fetchAllRecipes(),
-        fetchAllShoppingListItems(),
-      ]);
-      setMealPlans(plans || []);
-      setRecipes(fetchedRecipes || []);
-    };
-    loadCalendarData();
-  }, []);
+    // Fetchers are deduped + TTL-cached in the context, so revisiting is cheap.
+    void fetchAllMealPlans();
+    void fetchAllRecipes();
+    void fetchAllShoppingListItems();
+  }, [fetchAllMealPlans, fetchAllRecipes, fetchAllShoppingListItems]);
   // Create array of days for the calendar
-  const calendarDays = Array.from({
-    length: 42
-  }, (_, i) => {
-    const dayNumber = i - firstDayOfMonth + 1;
-    if (dayNumber > 0 && dayNumber <= daysInMonth) {
-      return dayNumber;
-    }
-    return null;
-  });
+  const calendarDays = useMemo(
+    () =>
+      Array.from({ length: 42 }, (_, i) => {
+        const dayNumber = i - firstDayOfMonth + 1;
+        return dayNumber > 0 && dayNumber <= daysInMonth ? dayNumber : null;
+      }),
+    [firstDayOfMonth, daysInMonth],
+  );
+  // One pass over the plans instead of a filter per grid cell / per render.
+  const mealsByDate = useMemo(() => groupMealPlansByDate(mealPlans), [mealPlans]);
+  const noMeals: MealPlan[] = useMemo(() => [], []);
   // Format date to YYYY-MM-DD for comparison
   const formatDateString = (year: number, month: number, day: number) => {
     return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -151,7 +153,16 @@ export function Calendar({
     return { from, to };
   }, [currentWeekStart]);
 
+  // Only the latest availability request may apply its result (stale responses and
+  // aborted requests are dropped), so shortage banners never show out-of-date data.
+  const availabilityRequestRef = useRef(0);
+  const availabilityAbortRef = useRef<AbortController | null>(null);
+
   const refreshAvailability = useCallback(async () => {
+    availabilityAbortRef.current?.abort();
+    const controller = new AbortController();
+    availabilityAbortRef.current = controller;
+    const requestId = ++availabilityRequestRef.current;
     const week = getWeekBounds();
     const monthFrom = formatDateString(currentYear, currentMonth, 1);
     const monthTo = formatDateString(currentYear, currentMonth, daysInMonth);
@@ -162,7 +173,8 @@ export function Calendar({
     const planTo = formatDateObj(weekPlus);
     const to = [week.to, monthTo, planTo].sort().pop() as string;
     try {
-      const res = await mealPlanApi.availability(from, to);
+      const res = await mealPlanApi.availability(from, to, { signal: controller.signal });
+      if (requestId !== availabilityRequestRef.current || controller.signal.aborted) return;
       if (res.success && res.data) {
         const map: Record<string, MealAvailabilityEntry> = {};
         for (const entry of res.data.meals ?? []) {
@@ -177,13 +189,17 @@ export function Calendar({
         setShortageRange(range.from && range.to ? { from: range.from, to: range.to } : null);
       }
     } catch (err) {
+      if (controller.signal.aborted || (err as { name?: string })?.name === 'AbortError') return;
       console.error('Failed to load meal availability:', err);
     }
   }, [getWeekBounds, currentYear, currentMonth, daysInMonth, currentWeekStart]);
 
+  // Re-runs when the visible range or the plans change; the previous request is cancelled.
+  // Plan mutations (add / delete / confirm / skip) all change `mealPlans`, so they land here.
   useEffect(() => {
     void refreshAvailability();
   }, [refreshAvailability, mealPlans]);
+  useEffect(() => () => availabilityAbortRef.current?.abort(), []);
 
   const clearNotificationTimer = () => {
     if (notificationTimerRef.current) {
@@ -208,22 +224,32 @@ export function Calendar({
     setAddingShopping(true);
     try {
       // Server merges qty by CI name + unit onto unchecked rows (closed-loop QA #2).
-      let added = 0;
+      // Merge identical name+unit shortages client-side (the server would merge them
+      // anyway) so the adds can run in parallel without racing on the same row.
+      const merged = new Map<string, { s: MealConfirmShortage; qty: number }>();
       for (const s of shortages) {
         const qty = Math.max(0, s.needed - (s.available ?? 0)) || s.needed;
         if (qty <= 0) continue;
-        await addShoppingListItem({
-          name: s.name,
-          quantity: qty,
-          unit: s.unit,
-          checked: false,
-          ...(s.ingredient_id ? { ingredient_id: s.ingredient_id } : {}),
-        });
-        added += 1;
+        const key = [s.name.trim().toLowerCase(), s.unit, s.ingredient_id ?? ''].join('|');
+        const existing = merged.get(key);
+        if (existing) existing.qty += qty;
+        else merged.set(key, { s, qty });
       }
+      await Promise.all(
+        [...merged.values()].map(({ s, qty }) =>
+          addShoppingListItem({
+            name: s.name,
+            quantity: qty,
+            unit: s.unit,
+            checked: false,
+            ...(s.ingredient_id ? { ingredient_id: s.ingredient_id } : {}),
+          }),
+        ),
+      );
+      const added = merged.size;
       if (added > 0) {
         showToast(t('calendar.addedToShopping', { count: added }), { durationMs: 3500 });
-        await fetchAllShoppingListItems();
+        await fetchAllShoppingListItems({ force: true });
         await refreshAvailability();
       } else {
         showToast(t('calendar.nothingToAdd'), { durationMs: 3500 });
@@ -275,21 +301,23 @@ export function Calendar({
     return { summary, extra };
   };
   // Get cooking history for selected date
-  const getHistoryForSelectedDate = () => {
-    if (!selectedDate) return [];
-    const dateString = formatDateString(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-    return mealPlans.filter((item: MealPlan) => item.serving_date === dateString);
-  };
-  // Group history by meal type
-  const getHistoryByMealType = () => {
-    const history = getHistoryForSelectedDate();
+  // Cooking history for the selected date, grouped by meal type (memoised).
+  const selectedDayMeals = useMemo(
+    () =>
+      selectedDate
+        ? mealsByDate.get(formatDateString(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())) ?? noMeals
+        : noMeals,
+    [selectedDate, mealsByDate, noMeals],
+  );
+  const historyByMealType = useMemo(() => {
+    const history = selectedDayMeals;
     return {
       breakfast: history.filter((item: MealPlan) => item.meal_type === 'breakfast'),
       lunch: history.filter((item: MealPlan) => item.meal_type === 'lunch'),
       dinner: history.filter((item: MealPlan) => item.meal_type === 'dinner'),
       snack: history.filter((item: MealPlan) => item.meal_type === 'snack')
     };
-  };
+  }, [selectedDayMeals]);
   // Navigation functions
   const previousMonth = () => {
     setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
@@ -364,10 +392,6 @@ export function Calendar({
       await deleteMealPlan(recipeToDelete.id);
       setShowDeleteConfirmation(false);
       setRecipeToDelete(null);
-
-      // Also remove from local state
-      setMealPlans(prev => prev.filter(mp => mp.id !== recipeToDelete.id));
-      void refreshAvailability();
     }
   };
 
@@ -384,17 +408,12 @@ export function Calendar({
     e?.stopPropagation();
     const response = await confirmMealPlan(item.id);
     if (response.success && response.data) {
-      const confirmed = response.data.mealPlan
-        ? { ...item, ...response.data.mealPlan, status: 'CONFIRMED' as const }
-        : { ...item, status: 'CONFIRMED' as const };
-      setMealPlans(prev => prev.map(mp => (mp.id === item.id ? confirmed : mp)));
       const shortages = response.data.shortages || [];
       if (shortages.length > 0) {
         showShortageTip(shortages);
       } else {
         showToast(t('calendar.confirmed', { name: item.meal_name }), { durationMs: 3500 });
       }
-      void refreshAvailability();
     }
   };
 
@@ -402,24 +421,19 @@ export function Calendar({
     e?.stopPropagation();
     const response = await skipMealPlan(item.id);
     if (response.success) {
-      setMealPlans(prev => prev.map(mp => (mp.id === item.id ? { ...mp, status: 'SKIPPED' } : mp)));
       showToast(t('calendar.skipped', { name: item.meal_name }), { durationMs: 3000 });
-      void refreshAvailability();
     }
   };
 
-  const pendingMeals = mealPlans.filter(m => m.status === 'PENDING_CONFIRM');
+  const pendingMeals = useMemo(() => mealPlans.filter(m => m.status === 'PENDING_CONFIRM'), [mealPlans]);
   const canActOnMeal = (item: MealPlan) =>
     !item.status || item.status === 'PLANNED' || item.status === 'PENDING_CONFIRM';
 
   // Filter recipes based on search query
-  const filteredRecipes = recipes.filter(recipe => {
-    // For meal recipes
-    if (recipe) {
-      return recipe.meal_name.toLowerCase().includes(searchQuery.toLowerCase());
-    }
-    return false;
-  });
+  const filteredRecipes = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return recipes.filter(recipe => (recipe ? recipe.meal_name.toLowerCase().includes(q) : false));
+  }, [recipes, searchQuery]);
   // Handle selecting a recipe from the dropdown
   const handleSelectRecipe = (recipeId: string) => {
     setSelectedRecipeId(recipeId);
@@ -466,16 +480,9 @@ export function Calendar({
     };
     const response = await addMealPlan(calendarRecipe);
     if (response && response.success && response.data) {
-      const saved = response.data;
-      // Context already updated; keep local list in sync immediately
-      setMealPlans(prev => {
-        const withoutTemp = prev.filter(m => m.id !== calendarRecipe.id);
-        const exists = withoutTemp.some(m => m.id === saved.id);
-        return exists ? withoutTemp : [...withoutTemp, saved];
-      });
+      // Context already holds the saved plan; the availability effect re-runs on that change.
       showToast(t('calendar.recipeAdded'), { durationMs: 3000 });
       resetAddModal();
-      void refreshAvailability();
     }
   };
 
@@ -504,33 +511,18 @@ export function Calendar({
     startDate.setHours(0, 0, 0, 0);
     setCurrentWeekStart(startDate);
   };
-  // Get week dates (7 consecutive days)
-  const getWeekDates = () => {
-    const dates = [];
+  // Get list view data for the current week
+  const weekViewData = useMemo(() => {
+    const weekData: Record<string, MealPlan[]> = {};
+    // All 7 days of the week, even if they have no meals
     for (let i = 0; i < 7; i++) {
       const date = new Date(currentWeekStart);
       date.setDate(currentWeekStart.getDate() + i);
-      dates.push(date);
-    }
-    return dates;
-  };
-  // Get list view data for the current week
-  const getWeekViewData = () => {
-    const weekDates = getWeekDates();
-    const weekData: Record<string, any> = {};
-    // Initialize all 7 days of the week, even if they have no meals
-    weekDates.forEach(date => {
       const dateString = formatDateObj(date);
-      weekData[dateString] = [];
-    });
-    // Add cooking history data for the week
-    mealPlans.forEach((item: any) => {
-      if (Object.prototype.hasOwnProperty.call(weekData, item.serving_date)) {
-        weekData[item.serving_date].push(item);
-      }
-    });
+      weekData[dateString] = mealsByDate.get(dateString) ?? [];
+    }
     return weekData;
-  };
+  }, [currentWeekStart, mealsByDate]);
   // Format date for display
   const formatDisplayDate = (dateString: string) => {
     const date = parseLocalDate(dateString);
@@ -557,7 +549,7 @@ export function Calendar({
             ? (raw as { recipe: Record<string, unknown> }).recipe
             : raw) as Record<string, unknown>;
           recipe = normalizeRecipe(payload);
-          setRecipes(prev => (prev.some(r => r.id === recipe!.id) ? prev : [...prev, recipe!]));
+          setExtraRecipes(prev => (prev.some(r => r.id === recipe!.id) ? prev : [...prev, recipe!]));
         }
       } catch (err) {
         console.error('Failed to load recipe for meal plan:', err);
@@ -712,21 +704,30 @@ export function Calendar({
               {/* Calendar days */}
               <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map((day, index) => {
-                  const isToday = day === new Date().getDate() && currentMonth === new Date().getMonth() && currentYear === new Date().getFullYear();
+                  const isToday = day === todayParts.date && currentMonth === todayParts.month && currentYear === todayParts.year;
                   const isSelected = selectedDate && day === selectedDate.getDate() && currentMonth === selectedDate.getMonth() && currentYear === selectedDate.getFullYear();
 
                   // Get meal types for this day
                   const dateString = day ? formatDateString(currentYear, currentMonth, day) : '';
-                  const dayMeals = day ? mealPlans.filter((item: MealPlan) => item.serving_date === dateString) : [];
-                  const hasMealTypes = {
-                    breakfast: dayMeals.some((meal: MealPlan) => meal.meal_type === 'breakfast'),
-                    lunch: dayMeals.some((meal: MealPlan) => meal.meal_type === 'lunch'),
-                    dinner: dayMeals.some((meal: MealPlan) => meal.meal_type === 'dinner'),
-                    snack: dayMeals.some((meal: MealPlan) => meal.meal_type === 'snack')
-                  };
-                  return <div key={index} onClick={() => handleDayClick(day)} className={`
+                  const dayMeals = day ? mealsByDate.get(dateString) ?? noMeals : noMeals;
+                  const hasMealTypes = mealTypePresence(dayMeals);
+                  const dayInteractive = day
+                    ? {
+                        role: 'button' as const,
+                        tabIndex: 0,
+                        'aria-pressed': Boolean(isSelected),
+                        'aria-label': [monthNames[currentMonth], day, dayMeals.length ? '(' + dayMeals.length + ')' : ''].join(' ').trim(),
+                        onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleDayClick(day);
+                          }
+                        },
+                      }
+                    : {};
+                  return <div key={index} {...dayInteractive} onClick={() => handleDayClick(day)} className={`
                           aspect-square lg:aspect-auto lg:min-h-[4.5rem] p-1.5 lg:p-2 relative flex flex-col justify-between
-                          ${day ? 'cursor-pointer active:scale-95' : ''}
+                          ${day ? 'cursor-pointer active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-herb' : ''}
                           ${isSelected ? 'bg-sage/50 border-2 border-herb' : day ? 'bg-surface border border-line' : 'bg-transparent'}
                           ${isToday && !isSelected ? 'border-2 border-herb/50' : ''}
                           rounded-lg transition-all duration-150
@@ -822,7 +823,7 @@ export function Calendar({
             )}
             {/* Week View */}
             <div className="space-y-2">
-              {Object.entries(getWeekViewData()).sort(([dateA], [dateB]) => parseLocalDate(dateA).getTime() - parseLocalDate(dateB).getTime()).map(([date, items]) => {
+              {Object.entries(weekViewData).sort(([dateA], [dateB]) => parseLocalDate(dateA).getTime() - parseLocalDate(dateB).getTime()).map(([date, items]) => {
                 const isExpanded = expandedDateGroups.includes(date);
                 const hasItems = Array.isArray(items) && items.length > 0;
                 return <div key={date} className="border border-line rounded-xl overflow-hidden bg-surface">
@@ -849,7 +850,7 @@ export function Calendar({
                             <div className="flex items-start flex-1 min-w-0 cursor-pointer" onClick={() => handleMealClick(item)}>
                               <div className="relative mr-2 flex-shrink-0">
                                 {thumb ? (
-                                  <img src={thumb} alt="" className="w-12 h-12 rounded-lg object-cover border border-line" />
+                                  <img src={thumb} alt="" width={48} height={48} loading="lazy" decoding="async" className="w-12 h-12 rounded-lg object-cover border border-line" />
                                 ) : (
                                   <div className="w-12 h-12 rounded-lg bg-sage/40 border border-line flex items-center justify-center">
                                     <ImageIcon size={18} className="text-muted" />
@@ -977,8 +978,8 @@ export function Calendar({
               {t('common.add')}
             </button>
           </div>
-          {getHistoryForSelectedDate().length > 0 ? <div>
-            {Object.entries(getHistoryByMealType()).map(([type, meals]) => {
+          {selectedDayMeals.length > 0 ? <div>
+            {Object.entries(historyByMealType).map(([type, meals]) => {
               if (meals.length === 0) return null;
               return <div key={type} className="mb-4 last:mb-0">
                 <h4 className="text-sm font-medium text-ink mb-2">
@@ -994,7 +995,7 @@ export function Calendar({
                           <div className="flex items-center min-w-0 flex-1 cursor-pointer" onClick={() => handleMealClick(item)}>
                             <div className="relative mr-2 flex-shrink-0">
                               {thumb ? (
-                                <img src={thumb} alt="" className="w-10 h-10 rounded-lg object-cover border border-line" />
+                                <img src={thumb} alt="" width={40} height={40} loading="lazy" decoding="async" className="w-10 h-10 rounded-lg object-cover border border-line" />
                               ) : (
                                 <div className={`w-1.5 h-1.5 rounded-full ${getMealTypeIndicatorColor(type)}`} />
                               )}
@@ -1235,7 +1236,7 @@ export function Calendar({
             {/* Recipe Image */}
             {selectedRecipeForDetail.image?.url ? (
               <div className="w-full h-64 relative">
-                <img src={selectedRecipeForDetail.image.url} alt={selectedRecipeForDetail.meal_name || 'Recipe'} className="w-full h-full object-cover" />
+                <img src={selectedRecipeForDetail.image.url} alt={selectedRecipeForDetail.meal_name || 'Recipe'} loading="lazy" decoding="async" className="w-full h-full object-cover" />
               </div>
             ) : null}
 

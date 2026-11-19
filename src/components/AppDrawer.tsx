@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   BotMessageSquare,
@@ -11,7 +11,7 @@ import {
   PlusIcon,
   XIcon,
 } from 'lucide-react';
-import { chatApi, ChatSession } from '../api/chat';
+import { chatSessionsStore } from '../utils/chatSessionsStore';
 
 export type AppDrawerView =
   | 'aiAssistant'
@@ -58,19 +58,22 @@ export function AppDrawer({
 }: AppDrawerProps) {
   const { t } = useTranslation();
   const isRail = variant === 'rail';
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const rawSessions = useSyncExternalStore(chatSessionsStore.subscribe, chatSessionsStore.getSnapshot);
+  const sessions = useMemo(
+    () => [...rawSessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
+    [rawSessions],
+  );
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [sessionsError, setSessionsError] = useState(false);
 
-  const refreshSessions = useCallback(async () => {
+  // Shared store: opening the drawer reuses a fresh list instead of refetching; `force`
+  // is only used when a new session was just created.
+  const refreshSessions = useCallback(async (force = false) => {
     setLoadingSessions(true);
     setSessionsError(false);
     try {
-      const res = await chatApi.listSessions();
-      const list = res.data?.sessions ?? [];
-      setSessions([...list].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)));
+      await chatSessionsStore.fetch({ force });
     } catch {
-      setSessions([]);
       setSessionsError(true);
     } finally {
       setLoadingSessions(false);
@@ -88,7 +91,7 @@ export function AppDrawer({
       const sessionId = detail?.sessionId?.trim();
       const title = detail?.title?.trim();
       if (!sessionId || !title) return;
-      setSessions((prev) => {
+      chatSessionsStore.update((prev) => {
         const idx = prev.findIndex((s) => s.id === sessionId);
         if (idx === -1) {
           return [
@@ -116,7 +119,7 @@ export function AppDrawer({
       const sessionId = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId?.trim();
       if (!sessionId) return;
       const nowSec = Math.floor(Date.now() / 1000);
-      setSessions((prev) =>
+      chatSessionsStore.update((prev) =>
         prev.some((s) => s.id === sessionId)
           ? prev
           : [
@@ -125,7 +128,7 @@ export function AppDrawer({
             ],
       );
       setSessionsError(false);
-      void refreshSessions();
+      void refreshSessions(true);
     };
     window.addEventListener('lardermind:chat-session-created', onSessionCreated);
     return () => window.removeEventListener('lardermind:chat-session-created', onSessionCreated);
