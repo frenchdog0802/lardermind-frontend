@@ -1,5 +1,6 @@
 import { MenuIcon, ArrowLeftIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface AppHeaderProps {
   title: string;
@@ -56,21 +57,24 @@ export function AppHeader({
           ) : null}
         </div>
 
-        {rightSlot ? (
-          rightSlot
-        ) : onNewChat ? (
-          <button
-            type="button"
-            onClick={onNewChat}
-            className="w-10 h-10 flex items-center justify-center rounded-full text-ink hover:bg-sage/50 transition-colors shrink-0"
-            aria-label={t('nav.newChat')}
-            title={t('nav.newChat')}
-          >
-            <PlusIcon size={22} />
-          </button>
-        ) : (
-          <div className="w-10 shrink-0" />
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          <LanguageSwitcher />
+          {rightSlot ? (
+            rightSlot
+          ) : onNewChat ? (
+            <button
+              type="button"
+              onClick={onNewChat}
+              className="w-10 h-10 flex items-center justify-center rounded-full text-ink hover:bg-sage/50 transition-colors shrink-0"
+              aria-label={t('nav.newChat')}
+              title={t('nav.newChat')}
+            >
+              <PlusIcon size={22} />
+            </button>
+          ) : (
+            <div className="w-10 shrink-0" />
+          )}
+        </div>
       </div>
     </header>
   );

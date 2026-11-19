@@ -7,7 +7,7 @@ import { SubscriptionPanel } from './SubscriptionPanel';
 import { AppHeader } from './AppHeader';
 import { userPreferencesApi } from '../api/userPreferences';
 import type { UserPreferences } from '../api/types';
-import { AppLanguage, persistLanguage } from '../i18n';
+import { AppLanguage, changeAppLanguage } from '../i18n';
 
 interface SettingsProps {
   onBack: () => void;
@@ -96,8 +96,7 @@ export function Settings({
 
   const applyLanguage = async (lng: AppLanguage) => {
     setLanguage(lng);
-    persistLanguage(lng);
-    await i18n.changeLanguage(lng);
+    await changeAppLanguage(lng);
     updateUserSettings({
       ...userSettings,
       language: lng,
