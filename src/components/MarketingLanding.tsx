@@ -8,6 +8,7 @@ import {
   HERO_IMAGE,
   HERO_WIDTH,
 } from '../remotion/HeroScene';
+import { LanguageSwitcher } from './LanguageSwitcher';
 import { GuestChatBox } from './GuestChatBox';
 import { PricingSection } from './PricingSection';
 import { ProductPreviewMock } from './ProductPreviewMock';
@@ -140,6 +141,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
           <a href="#faq" className="text-sm text-muted hover:text-ink">
             FAQ
           </a>
+          <LanguageSwitcher />
           <button type="button" onClick={onLogin} className="btn-secondary text-sm">
             Log in
           </button>
