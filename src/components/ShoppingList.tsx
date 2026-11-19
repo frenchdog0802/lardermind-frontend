@@ -1,3 +1,4 @@
+import { planShoppingAdd } from '../utils/shoppingAdd';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PlusIcon, CheckIcon, SearchIcon, TrashIcon } from 'lucide-react';
@@ -162,9 +163,9 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
             unitSelectOptions(newItemKind, measurementSystem, true),
         );
         const draft = { ...newShoppingItem, name: newShoppingItem.name.trim(), unit };
-        const existingItem = shoppingList.find(item => item.name.toLowerCase() === draft.name.toLowerCase());
-        if (existingItem) {
-            void updateShoppingListItem({ ...existingItem, quantity: draft.quantity, unit }).then(noteShoppingResult);
+        const plan = planShoppingAdd(shoppingList, draft);
+        if (plan.action === 'merge') {
+            void updateShoppingListItem({ ...plan.existing, quantity: plan.quantity, unit: plan.unit }).then(noteShoppingResult);
         } else {
             addShoppingListItem(draft);
         }

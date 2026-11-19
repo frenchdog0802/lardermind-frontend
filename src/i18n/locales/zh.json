@@ -220,6 +220,7 @@
     "planRange": "{{from}} – {{to}}"
   },
   "pantry": {
+    "itemCount_other": "{{count}} 項食材",
     "title": "廚房庫存",
     "subtitle": "追蹤手上現有的食材",
     "searchPlaceholder": "搜尋食材...",
@@ -462,8 +463,8 @@
       },
       "meals": {
         "title": "規劃餐點",
-        "body": "可在日曆手動排程，或請 AI 幫你規劃本週晚餐。",
-        "ctaCalendar": "開啟日曆",
+        "body": "可在行事曆手動排程，或請 AI 幫你規劃本週晚餐。",
+        "ctaCalendar": "開啟行事曆",
         "ctaAi": "請 AI 規劃晚餐"
       },
       "shopping": {

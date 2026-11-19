@@ -163,3 +163,19 @@ describe('shopping list manual add + purchased restore', () => {
     assert.match(src, /shopping\.restore/);
   });
 });
+
+describe('pantry header count label', () => {
+  it('is translated with plurals and spaced separator', () => {
+    const src = read('src/components/PantryInventory.tsx');
+    assert.ok(src.includes("t('pantry.itemCount', { count: filteredItems.length })"));
+    assert.doesNotMatch(src, /item\{filteredItems/);
+    const en = locale('en').pantry as Record<string, string>;
+    const zh = locale('zh').pantry as Record<string, string>;
+    assert.equal(en.itemCount_one, '{{count}} item');
+    assert.equal(en.itemCount_other, '{{count}} items');
+    assert.ok(zh.itemCount_other.includes('{{count}}'));
+  });
+  it('zh uses one calendar term in the UI', () => {
+    assert.ok(!JSON.stringify(locale('zh')).includes('日曆'));
+  });
+});
