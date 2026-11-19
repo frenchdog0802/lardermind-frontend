@@ -55,6 +55,7 @@ export function Calendar({
     fetchAllShoppingListItems,
     addShoppingListItem,
     shoppingList,
+    pantryItems,
   } = usePantry();
   // Recipes fetched on demand for a meal plan whose recipe is not in the context list.
   const [extraRecipes, setExtraRecipes] = useState<Recipe[]>([]);
@@ -196,9 +197,17 @@ export function Calendar({
 
   // Re-runs when the visible range or the plans change; the previous request is cancelled.
   // Plan mutations (add / delete / confirm / skip) all change `mealPlans`, so they land here.
+  // Buying and checking off shopping items syncs them into the pantry, which changes what is
+  // still missing. Re-run availability when the pantry contents change (debounced) so the red
+  // "Need" lines clear without a reload.
+  const pantrySignature = useMemo(
+    () => (pantryItems ?? []).map((p) => `${p.id}:${p.quantity}:${p.unit ?? ''}`).join('|'),
+    [pantryItems],
+  );
   useEffect(() => {
-    void refreshAvailability();
-  }, [refreshAvailability, mealPlans]);
+    const handle = setTimeout(() => void refreshAvailability(), 300);
+    return () => clearTimeout(handle);
+  }, [refreshAvailability, mealPlans, pantrySignature]);
   useEffect(() => () => availabilityAbortRef.current?.abort(), []);
 
   const clearNotificationTimer = () => {
@@ -260,6 +269,12 @@ export function Calendar({
       setAddingShopping(false);
     }
   };
+
+  /** Meal plans created without a name fall back to their recipe's name. */
+  const mealTitle = (item: MealPlan): string =>
+    item.meal_name?.trim() ||
+    recipes.find((r) => String(r.id) === String(item.recipe_id ?? ''))?.meal_name?.trim() ||
+    t('calendar.untitledMeal');
 
   const mealThumbUrl = (item: MealPlan): string | null => {
     if (item.image && typeof item.image === 'string' && item.image.trim()) {
@@ -643,7 +658,7 @@ export function Calendar({
               {pendingMeals.map(item => (
                 <div key={item.id} className="flex items-center justify-between gap-2 bg-surface/80 rounded-lg px-3 py-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink truncate">{item.meal_name}</p>
+                    <p className="text-sm font-medium text-ink truncate">{mealTitle(item)}</p>
                     <p className="text-xs text-muted">{item.serving_date} · {getMealTypeLabel(item.meal_type)}</p>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -866,7 +881,7 @@ export function Calendar({
                                 <div className="flex items-center gap-1.5">
                                   <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getMealTypeIndicatorColor(item.meal_type)}`} />
                                   <p className="font-medium text-sm text-ink truncate">
-                                    {item.meal_name}
+                                    {mealTitle(item)}
                                   </p>
                                 </div>
                                 <p className="text-xs text-muted mt-0.5">
@@ -901,6 +916,12 @@ export function Calendar({
                                         <ShoppingCartIcon size={12} />
                                         {t('calendar.addMissingToShopping')}
                                       </button>
+                                    )}
+                                    {shortagesNotOnList(avail.shortages, shoppingList).length === 0 && (
+                                      <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-muted" data-testid="on-shopping-list">
+                                        <ShoppingCartIcon size={12} />
+                                        {t('calendar.onShoppingList')}
+                                      </p>
                                     )}
                                   </div>
                                 )}
@@ -1006,7 +1027,7 @@ export function Calendar({
                             </div>
                             <div className="min-w-0">
                               <p className="font-medium text-sm text-ink truncate">
-                                {item.meal_name}
+                                {mealTitle(item)}
                               </p>
                               {item.status && item.status !== 'PLANNED' && (
                                 <p className="text-xs text-muted">
@@ -1028,6 +1049,12 @@ export function Calendar({
                                   <ShoppingCartIcon size={12} />
                                   {t('calendar.addMissingToShopping')}
                                 </button>
+                              )}
+                              {avail?.status === 'short' && avail.shortages.length > 0 && shortagesNotOnList(avail.shortages, shoppingList).length === 0 && (
+                                <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted" data-testid="on-shopping-list">
+                                  <ShoppingCartIcon size={12} />
+                                  {t('calendar.onShoppingList')}
+                                </p>
                               )}
                             </div>
                           </div>

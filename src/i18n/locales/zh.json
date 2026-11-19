@@ -206,6 +206,8 @@
     "stockOk": "庫存看起來足夠",
     "stockShort": "缺少食材",
     "stockUnknown": "無法檢查庫存（未連結食譜）",
+    "onShoppingList": "已在購物清單。買完並勾選後會自動更新。",
+    "untitledMeal": "未命名餐點",
     "addMissingToShopping": "將缺少的加入購物清單",
     "addAllMissing": "將本週缺少的全部加入購物清單",
     "addedToShopping": "已加入 {{count}} 項到購物清單",

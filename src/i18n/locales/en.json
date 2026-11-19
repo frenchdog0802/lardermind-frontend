@@ -206,6 +206,8 @@
     "stockOk": "Pantry looks sufficient",
     "stockShort": "Missing ingredients",
     "stockUnknown": "Can't check pantry (no linked recipe)",
+    "onShoppingList": "On your shopping list. Updates after you buy and check them off.",
+    "untitledMeal": "Untitled meal",
     "addMissingToShopping": "Add missing to shopping",
     "addAllMissing": "Add all missing to shopping",
     "addedToShopping": "Added {{count}} item(s) to shopping list",
