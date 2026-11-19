@@ -220,6 +220,8 @@
     "planRange": "{{from}} – {{to}}"
   },
   "pantry": {
+    "itemCount_one": "{{count}} item",
+    "itemCount_other": "{{count}} items",
     "title": "Kitchen Inventory",
     "subtitle": "Track what you have on hand",
     "searchPlaceholder": "Search ingredients...",

@@ -454,8 +454,9 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                 onOpenMenu={onOpenMenu}
                 subtitle={
                     <>
-                        {filteredItems.length} item{filteredItems.length === 1 ? '' : 's'}
-                        {` · ${t('shopping.buyCount', { count: needsBuyingCount })}`}
+                        {t('pantry.itemCount', { count: filteredItems.length })}
+                        {' · '}
+                        {t('shopping.buyCount', { count: needsBuyingCount })}
                     </>
                 }
             />
