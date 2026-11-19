@@ -1,16 +1,11 @@
-﻿import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Player } from '@remotion/player';
-import {
-  HeroScene,
-  HERO_DURATION_FRAMES,
-  HERO_FPS,
-  HERO_HEIGHT,
-  HERO_IMAGE,
-  HERO_WIDTH,
-} from '../remotion/HeroScene';
+﻿import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { HERO_IMAGE } from '../remotion/heroConstants';
 import { GuestChatBox } from './GuestChatBox';
 import { PricingSection } from './PricingSection';
 import { ProductPreviewMock } from './ProductPreviewMock';
+
+// The Remotion runtime is heavy; the static <img> below paints first, the Player loads after.
+const HeroPlayer = lazy(() => import('../remotion/HeroPlayer'));
 
 interface MarketingLandingProps {
   onGetStarted: () => void;
@@ -110,17 +105,9 @@ function HeroVisual({ prefersReducedMotion }: { prefersReducedMotion: boolean })
         }}
       />
       {!prefersReducedMotion && (
-        <Player
-          component={HeroScene}
-          durationInFrames={HERO_DURATION_FRAMES}
-          compositionWidth={HERO_WIDTH}
-          compositionHeight={HERO_HEIGHT}
-          fps={HERO_FPS}
-          loop
-          autoPlay
-          acknowledgeRemotionLicense
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-        />
+        <Suspense fallback={null}>
+          <HeroPlayer />
+        </Suspense>
       )}
     </>
   );

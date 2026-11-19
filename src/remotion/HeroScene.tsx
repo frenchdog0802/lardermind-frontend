@@ -1,12 +1,6 @@
 import { AbsoluteFill, Img, interpolate, useCurrentFrame } from 'remotion';
 
-export const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1800&q=80';
-
-export const HERO_DURATION_FRAMES = 150;
-export const HERO_FPS = 30;
-export const HERO_WIDTH = 1920;
-export const HERO_HEIGHT = 1080;
+import { HERO_DURATION_FRAMES, HERO_IMAGE } from './heroConstants';
 
 export function HeroScene() {
   const frame = useCurrentFrame();

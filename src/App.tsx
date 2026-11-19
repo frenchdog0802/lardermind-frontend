@@ -1,24 +1,48 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { Calendar } from './components/Calendar';
-import { PantryInventory } from './components/PantryInventory';
-import { ShoppingList } from './components/ShoppingList';
-import { RecipeManager } from './components/RecipeManager';
 import { Login } from './components/Login';
 import { SignUp } from './components/SignUp';
-import { Settings } from './components/Settings';
 import { Loading } from './components/Loading';
 import { PantryProvider } from './contexts/pantryContext';
 import { AuthProvider, useAuth } from './contexts/authContext';
-import { AICookingAssistant } from './components/AICookingAssistant';
 import { AppDrawer, type AppDrawerView } from './components/AppDrawer';
-import { SubscriptionView } from './components/SubscriptionView';
-import { MarketingLanding } from './components/MarketingLanding';
 import { clearSetupGuideLocalStorage } from './utils/setupGuide';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { NotFound } from './components/NotFound';
 import { ForgotPassword, ResetPassword } from './components/PasswordReset';
 import { resolveAppRoute, type AppRoute } from './utils/appRoutes';
+
+// Route-level code splitting. Views are still kept alive by KEEP_ALIVE_VIEWS once visited;
+// lazy only defers the first download.
+const Calendar = lazy(() => import('./components/Calendar').then((m) => ({ default: m.Calendar })));
+const PantryInventory = lazy(() =>
+  import('./components/PantryInventory').then((m) => ({ default: m.PantryInventory })),
+);
+const ShoppingList = lazy(() =>
+  import('./components/ShoppingList').then((m) => ({ default: m.ShoppingList })),
+);
+const RecipeManager = lazy(() =>
+  import('./components/RecipeManager').then((m) => ({ default: m.RecipeManager })),
+);
+const Settings = lazy(() => import('./components/Settings').then((m) => ({ default: m.Settings })));
+const AICookingAssistant = lazy(() =>
+  import('./components/AICookingAssistant').then((m) => ({ default: m.AICookingAssistant })),
+);
+const SubscriptionView = lazy(() =>
+  import('./components/SubscriptionView').then((m) => ({ default: m.SubscriptionView })),
+);
+const MarketingLanding = lazy(() =>
+  import('./components/MarketingLanding').then((m) => ({ default: m.MarketingLanding })),
+);
+
+/** Fixed-height fallback (full viewport) so swapping in a view does not shift layout. */
+function ViewFallback() {
+  return (
+    <div className="min-h-screen bg-linen" aria-busy="true">
+      <Loading compact />
+    </div>
+  );
+}
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 const GUEST_VIEWS = new Set(['landing', 'login', 'signup']);
@@ -233,6 +257,7 @@ function AppContent() {
       )}
 
       <div className="flex-1 min-w-0">
+      <Suspense fallback={<ViewFallback />}>
       {currentView === 'landing' && (
         <MarketingLanding onGetStarted={navigateToSignUp} onLogin={navigateToLogin} />
       )}
@@ -344,6 +369,7 @@ function AppContent() {
       {currentView === 'signup' && (
         <SignUp onSignUpSuccess={navigateToAiAssistant} onLogin={navigateToLogin} />
       )}
+      </Suspense>
       </div>
 
     </div>

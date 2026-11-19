@@ -1,11 +1,11 @@
 import { Composition } from 'remotion';
+import { HeroScene } from './HeroScene';
 import {
-  HeroScene,
   HERO_DURATION_FRAMES,
   HERO_FPS,
   HERO_HEIGHT,
   HERO_WIDTH,
-} from './HeroScene';
+} from './heroConstants';
 
 export const RemotionRoot = () => (
   <>
