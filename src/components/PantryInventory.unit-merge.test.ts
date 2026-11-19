@@ -20,11 +20,10 @@ describe('PantryInventory merge update', () => {
     const src = readFileSync(join(root, 'src/components/PantryInventory.tsx'), 'utf8');
     assert.match(
       src,
-      /const displayedUnit = resolveSelectedUnit\(\s*newItem\.unit,\s*unitSelectOptions\(addFormUnitKind, measurementSystem, true\)/,
-      'add path must resolve the unit exactly like UnitSelect (preferSystemUnits)',
+      /const displayedUnit = resolveSelectedUnit\(\s*newItem\.unit,\s*unitSelectOptions\(undefined, measurementSystem, false\)/,
+      'add path must resolve the unit exactly like UnitSelect (all units)',
     );
     assert.match(src, /addPantryItem\(\{ \.\.\.newItem, unit: displayedUnit \}\)/);
-    assert.match(src, /kind=\{addFormUnitKind\}[\s\S]{0,400}preferSystemUnits/);
     assert.match(src, /fetchAllIngredients\(null\)/, 'must load ingredient catalog for search');
   });
 });

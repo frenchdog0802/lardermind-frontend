@@ -213,7 +213,7 @@
     "missingSummaryRange": "{{range}} 需要：{{summary}}{{extra}}",
     "addAllMissingRange": "將缺少的全部加入購物清單",
     "alreadyOnList": "缺少的食材已在購物清單中",
-    "planRange": "{{from}} - {{to}}"
+    "planRange": "{{from}} – {{to}}"
   },
   "pantry": {
     "title": "廚房庫存",

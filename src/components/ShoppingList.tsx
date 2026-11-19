@@ -15,6 +15,7 @@ import {
     shoppingBuyCount,
     shoppingEmptyState,
 } from '../utils/shoppingListState';
+import { createToastController } from '../utils/toastTimer';
 import type { MeasurementSystem } from '../utils/units';
 
 interface ShoppingListProps {
@@ -43,7 +44,8 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
     const [message, setMessage] = useState('');
     const [undoIds, setUndoIds] = useState<string[] | null>(null);
     const [inFlightIds, setInFlightIds] = useState<string[]>([]);
-    const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const undoIdsRef = useRef<string[] | null>(null);
+    const pendingSyncRef = useRef<Promise<unknown> | null>(null);
     const [shoppingSearchQuery, setShoppingSearchQuery] = useState('');
     const [newShoppingItem, setNewShoppingItem] = useState({
         name: '',
@@ -88,12 +90,6 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         setShoppingList(oriShoppingList);
     }, [oriShoppingList]);
 
-    useEffect(() => {
-        return () => {
-            if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-        };
-    }, []);
-
     const filteredShoppingItems = useMemo(() => {
         return shoppingList.filter(item => {
             // Items already moved to the pantry leave "Items to Buy".
@@ -112,15 +108,20 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
 
     const buyCount = useMemo(() => shoppingBuyCount(shoppingList), [shoppingList]);
 
+    const toastRef = useRef<ReturnType<typeof createToastController> | null>(null);
+    if (!toastRef.current) {
+        toastRef.current = createToastController(state => {
+            setShowMessage(state !== null);
+            if (state) setMessage(state.text);
+            setUndoIds(state ? state.undoIds : null);
+            undoIdsRef.current = state ? state.undoIds : null;
+        });
+    }
+    const toast = toastRef.current;
+    useEffect(() => () => toast.dismiss(), [toast]);
+
     const showToast = (text: string, idsForUndo?: string[]) => {
-        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-        setMessage(text);
-        setShowMessage(true);
-        setUndoIds(idsForUndo ?? null);
-        undoTimerRef.current = setTimeout(() => {
-            setShowMessage(false);
-            setUndoIds(null);
-        }, idsForUndo ? UNDO_TOAST_MS : INFO_TOAST_MS);
+        toast.show(text, idsForUndo ?? null, idsForUndo ? UNDO_TOAST_MS : INFO_TOAST_MS);
     };
 
     const noteShoppingResult = (res: { code?: string }) => {
@@ -180,25 +181,34 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
         // Keep the "empty list" message away while this check-off is pending.
         setInFlightIds(prev => [...prev, id]);
         try {
+            // Show the Undo toast the moment the user checks the item (8s starts now);
+            // the network result only updates its text, never restarts the timer.
+            if (updatedItem.checked) {
+                showToast(t('shopping.itemAddedToPantry', { name: item.name }), [id]);
+            }
             const res = await updateShoppingListItem(updatedItem);
             if (res.code === 'version_conflict') {
                 noteShoppingResult(res);
                 return;
             }
-            if (res.success) {
-                applyCheckedLocally(id, updatedItem.checked);
-                if (shoppingSearchQuery) setShoppingSearchQuery('');
-                if (updatedItem.checked) {
-                    // One step: checking off also adds the item to the pantry (with Undo).
-                    const syncRes = await syncShoppingItemsToPantry([{ id }]);
-                    const syncedIds = syncRes.success && syncRes.data
-                        ? syncRes.data.synced.map(i => i.id)
-                        : [];
-                    if (syncedIds.length > 0) {
-                        showToast(t('shopping.itemAddedToPantry', { name: item.name }), syncedIds);
-                    } else {
-                        showToast(t('shopping.purchasedOnly'));
-                    }
+            if (!res.success) {
+                if (updatedItem.checked) toast.dismiss();
+                return;
+            }
+            applyCheckedLocally(id, updatedItem.checked);
+            if (shoppingSearchQuery) setShoppingSearchQuery('');
+            if (updatedItem.checked) {
+                // One step: checking off also adds the item to the pantry (with Undo).
+                const syncPromise = syncShoppingItemsToPantry([{ id }]);
+                pendingSyncRef.current = syncPromise;
+                const syncRes = await syncPromise;
+                const syncedIds = syncRes.success && syncRes.data
+                    ? syncRes.data.synced.map(i => i.id)
+                    : [];
+                if (syncedIds.length > 0) {
+                    toast.update(t('shopping.itemAddedToPantry', { name: item.name }), syncedIds);
+                } else {
+                    toast.update(t('shopping.purchasedOnly'), null);
                 }
             }
         } finally {
@@ -284,10 +294,11 @@ export function ShoppingList({ onBack: _onBack, onOpenMenu, onAskAi }: ShoppingL
 
     const handleUndoSync = async () => {
         if (!undoIds?.length) return;
-        const ids = undoIds;
-        setUndoIds(null);
-        setShowMessage(false);
-        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        // Undo tapped while the check-off sync is still in flight: let it land first.
+        if (pendingSyncRef.current) await pendingSyncRef.current;
+        const ids = undoIdsRef.current ?? undoIds;
+        toast.dismiss();
+        if (!ids.length) return;
         setInFlightIds(prev => [...prev, ...ids]);
         try {
             const res = await unsyncShoppingItemsFromPantry(ids);
