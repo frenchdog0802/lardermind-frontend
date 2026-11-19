@@ -6,6 +6,7 @@ interface SubscriptionViewProps {
   onOpenMenu?: () => void;
   active?: boolean;
   checkoutSuccess?: boolean;
+  checkoutSessionId?: string | null;
   checkoutCancelled?: boolean;
   portalReturn?: boolean;
 }
@@ -14,6 +15,7 @@ export function SubscriptionView({
   onOpenMenu,
   active = true,
   checkoutSuccess = false,
+  checkoutSessionId = null,
   checkoutCancelled = false,
   portalReturn = false,
 }: SubscriptionViewProps) {
@@ -26,6 +28,7 @@ export function SubscriptionView({
         <SubscriptionPanel
           active={active}
           checkoutSuccess={checkoutSuccess}
+          checkoutSessionId={checkoutSessionId}
           checkoutCancelled={checkoutCancelled}
           portalReturn={portalReturn}
         />

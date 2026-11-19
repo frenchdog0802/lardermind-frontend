@@ -1,4 +1,5 @@
 ﻿import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HERO_IMAGE } from '../remotion/heroConstants';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { GuestChatBox } from './GuestChatBox';
@@ -13,24 +14,7 @@ interface MarketingLandingProps {
   onLogin: () => void;
 }
 
-const FAQ_ITEMS = [
-  {
-    q: 'How is LarderMind different from Mealime?',
-    a: 'Mealime is a strong meal-plan and grocery workflow. LarderMind is pantry-first and chat-first: you talk to an AI that remembers preferences, plans from what you already have, and closes the loop into calendar, shopping list, and pantry.',
-  },
-  {
-    q: 'How is it different from SuperCook?',
-    a: 'SuperCook is great at “what can I make from these ingredients?” as a recipe finder. LarderMind covers that idea inside a full kitchen loop — ongoing pantry, weekly plan, shopping list, and cooking confirmation — not only one-shot recipe search.',
-  },
-  {
-    q: 'Is there a free plan?',
-    a: 'Yes. Free includes pantry, shopping, calendar, and a daily AI chat allowance. Upgrade anytime for a 7-day Pro trial — then higher AI and upload limits from $4.99/mo.',
-  },
-  {
-    q: 'Where does it run?',
-    a: 'On the web, and on iOS and Android. Sign up free on the web to start; use the same kitchen across devices.',
-  },
-] as const;
+const FAQ_KEYS = [1, 2, 3, 4] as const;
 
 function usePrefersReducedMotion() {
   const [prefersReduced, setPrefersReduced] = useState(false);
@@ -115,6 +99,7 @@ function HeroVisual({ prefersReducedMotion }: { prefersReducedMotion: boolean })
 }
 
 export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProps) {
+  const { t } = useTranslation();
   const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
@@ -123,14 +108,14 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
         <span className="font-display text-xl font-semibold text-ink">LarderMind</span>
         <div className="flex items-center gap-4">
           <a href="#pricing" className="text-sm text-muted hover:text-ink">
-            Pricing
+            {t('landing.nav.pricing')}
           </a>
           <a href="#faq" className="text-sm text-muted hover:text-ink">
-            FAQ
+            {t('landing.nav.faq')}
           </a>
           <LanguageSwitcher />
           <button type="button" onClick={onLogin} className="btn-secondary text-sm">
-            Log in
+            {t('landing.nav.login')}
           </button>
         </div>
       </nav>
@@ -145,17 +130,17 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
             LarderMind
           </p>
           <h1 className="mt-3 max-w-xl font-display text-[clamp(1.5rem,4vw,2rem)] font-medium leading-tight text-ink">
-            An AI assistant that plans your meals from what&apos;s in your pantry.
+            {t('landing.hero.tagline')}
           </h1>
           <div className="mt-8 flex flex-wrap gap-4">
             <button type="button" onClick={onGetStarted} className="btn-primary">
-              Sign up free
+              {t('landing.hero.signUp')}
             </button>
             <button type="button" onClick={onLogin} className="btn-secondary px-6 py-3">
-              Log in
+              {t('landing.hero.login')}
             </button>
           </div>
-          <p className="mt-4 text-sm text-muted">Works on Web · iOS · Android</p>
+          <p className="mt-4 text-sm text-muted">{t('landing.hero.platforms')}</p>
         </div>
       </header>
 
@@ -163,20 +148,19 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
         <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2 lg:items-center">
           <RevealOnScroll>
             <p className="text-sm font-semibold uppercase tracking-widest text-herb">
-              See it in action
+              {t('landing.demo.eyebrow')}
             </p>
             <h2 className="mt-3 font-display text-[clamp(1.75rem,4vw,2.25rem)] font-semibold text-ink">
-              Just ask — LarderMind handles the rest
+              {t('landing.demo.title')}
             </h2>
             <p className="mt-4 text-lg text-muted">
-              Talk to your kitchen in plain English. Plan meals, update your pantry, and build grocery
-              lists — the same chat you use every day in the app. Guest demo: 5 AI messages / day.
+              {t('landing.demo.body')}
             </p>
             <ul className="mt-8 space-y-4">
               {[
-                "Ask what you can cook with what's already in your fridge",
-                'Plan a week of dinners that respect allergies and picky eaters',
-                'Add ingredients from a pasted fridge list in one message',
+                t('landing.demo.bullet1'),
+                t('landing.demo.bullet2'),
+                t('landing.demo.bullet3'),
               ].map((item) => (
                 <li key={item} className="flex gap-3 text-ink">
                   <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-herb" />
@@ -185,7 +169,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
               ))}
             </ul>
             <button type="button" onClick={onGetStarted} className="btn-primary mt-10">
-              Sign up free
+              {t('landing.hero.signUp')}
             </button>
           </RevealOnScroll>
 
@@ -195,14 +179,13 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
               <div className="relative">
                 <div className="mb-3 flex items-center justify-end">
                   <span className="rounded-full bg-sage/60 px-2.5 py-0.5 text-xs font-medium text-herb-deep">
-                    Live try
+                    {t('landing.demo.liveTry')}
                   </span>
                 </div>
                 <GuestChatBox
                   onGetStarted={onGetStarted}
                   showHeader={false}
                   size="large"
-                  fixedLanguage="en"
                 />
               </div>
             </div>
@@ -216,33 +199,19 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
         <RevealOnScroll>
           <div className="mx-auto mb-12 max-w-2xl text-center">
             <h2 className="font-display text-[clamp(1.75rem,4vw,2.25rem)] font-semibold text-ink">
-              The &quot;what&apos;s for dinner?&quot; struggle is real
+              {t('landing.struggle.title')}
             </h2>
             <p className="mt-3 text-lg text-muted">
-              It&apos;s not just cooking — it&apos;s the mental load of deciding, every single day.
+              {t('landing.struggle.subtitle')}
             </p>
           </div>
         </RevealOnScroll>
 
         <ul className="mx-auto max-w-2xl divide-y divide-line">
-          {[
-            {
-              title: 'Decision fatigue',
-              body: '365 days of "what should I cook?" wears you down.',
-            },
-            {
-              title: 'Picky eaters',
-              body: 'Allergies, dislikes, and preferences — remembered once, applied forever.',
-            },
-            {
-              title: 'Budget pressure',
-              body: 'Meals that use what you have and keep costs down.',
-            },
-            {
-              title: 'Leftover guilt',
-              body: "Ingredients in the fridge, planned into tonight's dinner.",
-            },
-          ].map((item) => (
+          {[1, 2, 3, 4].map((n) => ({
+            title: t(`landing.struggle.item${n}Title`),
+            body: t(`landing.struggle.item${n}Body`),
+          })).map((item) => (
             <RevealOnScroll key={item.title}>
               <li className="py-6">
                 <strong className="block font-semibold text-ink">{item.title}</strong>
@@ -257,7 +226,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
         <RevealOnScroll>
           <div className="mx-auto mb-16 max-w-2xl text-center">
             <h2 className="font-display text-[clamp(1.75rem,4vw,2.25rem)] font-semibold text-ink">
-              How LarderMind works
+              {t('landing.how.title')}
             </h2>
           </div>
         </RevealOnScroll>
@@ -266,29 +235,29 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
           {[
             {
               step: '01',
-              title: 'Smart memory',
-              body: 'Tell LarderMind once that your kid is allergic to peanuts or your partner dislikes spicy food. It remembers for every plan.',
+              title: t('landing.how.step1Title'),
+              body: t('landing.how.step1Body'),
               image:
                 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=800&q=80',
-              alt: 'Family cooking together in a warm kitchen',
+              alt: t('landing.how.step1Alt'),
               reverse: false,
             },
             {
               step: '02',
-              title: 'Cook with what you have',
-              body: "Plans prioritize ingredients already in your pantry and fridge — especially what's about to expire.",
+              title: t('landing.how.step2Title'),
+              body: t('landing.how.step2Body'),
               image:
                 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
-              alt: 'Fresh vegetables and ingredients on a counter',
+              alt: t('landing.how.step2Alt'),
               reverse: true,
             },
             {
               step: '03',
-              title: 'Auto grocery list',
-              body: "Only buy what you're missing. One sorted list, ready for your weekly shop.",
+              title: t('landing.how.step3Title'),
+              body: t('landing.how.step3Body'),
               image:
                 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?auto=format&fit=crop&w=800&q=80',
-              alt: 'Fresh produce at a market',
+              alt: t('landing.how.step3Alt'),
               reverse: false,
             },
           ].map((feature) => (
@@ -326,20 +295,20 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
         <RevealOnScroll>
           <div className="mx-auto mb-12 max-w-2xl text-center">
             <h2 className="font-display text-[clamp(1.75rem,4vw,2.25rem)] font-semibold text-ink">
-              FAQ
+              {t('landing.faq.title')}
             </h2>
             <p className="mt-3 text-lg text-muted">
-              Quick answers if you already use Mealime, SuperCook, or another meal app.
+              {t('landing.faq.subtitle')}
             </p>
           </div>
         </RevealOnScroll>
 
         <dl className="mx-auto max-w-2xl divide-y divide-line">
-          {FAQ_ITEMS.map((item) => (
-            <RevealOnScroll key={item.q}>
+          {FAQ_KEYS.map((n) => (
+            <RevealOnScroll key={n}>
               <div className="py-6">
-                <dt className="font-semibold text-ink">{item.q}</dt>
-                <dd className="mt-2 text-muted">{item.a}</dd>
+                <dt className="font-semibold text-ink">{t(`landing.faq.q${n}`)}</dt>
+                <dd className="mt-2 text-muted">{t(`landing.faq.a${n}`)}</dd>
               </div>
             </RevealOnScroll>
           ))}
@@ -350,17 +319,17 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
         <RevealOnScroll>
           <div className="mx-auto max-w-xl text-center">
             <h2 className="font-display text-[clamp(1.75rem,4vw,2.25rem)] font-semibold text-ink">
-              Stop the dinner stress today
+              {t('landing.join.title')}
             </h2>
             <p className="mt-3 text-lg text-muted">
-              Create a free account and start planning meals with AI in minutes.
+              {t('landing.join.body')}
             </p>
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <button type="button" onClick={onGetStarted} className="btn-primary">
-                Sign up free
+                {t('landing.hero.signUp')}
               </button>
               <button type="button" onClick={onLogin} className="btn-secondary px-6 py-3">
-                Log in
+                {t('landing.hero.login')}
               </button>
             </div>
           </div>
@@ -373,23 +342,23 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
           <ul className="flex gap-6 text-sm text-muted">
             <li>
               <a href="/legal/privacy-policy.html" className="hover:text-ink">
-                Privacy
+                {t('landing.footer.privacy')}
               </a>
             </li>
             <li>
               <a href="/legal/terms-of-service.html" className="hover:text-ink">
-                Terms
+                {t('landing.footer.terms')}
               </a>
             </li>
             <li>
               <a href="mailto:support@lardermind.com" className="hover:text-ink">
-                Contact
+                {t('landing.footer.contact')}
               </a>
             </li>
           </ul>
         </div>
         <p className="mx-auto mt-8 max-w-5xl text-sm text-muted">
-          &copy; 2026 LarderMind. All rights reserved.
+          {t('landing.footer.copyright')}
         </p>
       </footer>
     </div>

@@ -451,7 +451,7 @@ export function AICookingAssistant({
       const confirmationMessage: Message = {
         id: `confirmation-${Date.now()}`,
         role: 'assistant',
-        content: `Added to today's dinner (${servingDate}). Open Calendar to see it — also filed under Dinner.`,
+        content: t('ai.addedToTodayDinner', { date: servingDate }),
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, confirmationMessage]);
@@ -1286,7 +1286,7 @@ export function AICookingAssistant({
                           </ul>
                         )}
                         <button onClick={handleViewCalendar} className="w-full mt-3 bg-herb text-white py-2 rounded-lg text-sm">
-                          Open Calendar
+                          {t('ai.openCalendar')}
                         </button>
                       </div>
                     )}
@@ -1311,13 +1311,13 @@ export function AICookingAssistant({
                           ))}
                         </div>
                         <button onClick={handleViewPantry} className="w-full mt-3 bg-herb text-white py-2 rounded-lg text-sm">
-                          Open Pantry
+                          {t('ai.openPantry')}
                         </button>
                       </div>
                     )}
                     {message.type === 'preferences_updated' && message.cardData && (
                       <div className="mt-3 bg-surface border border-line rounded-xl p-4">
-                        <p className="font-medium text-ink mb-2">Preferences saved</p>
+                        <p className="font-medium text-ink mb-2">{t('ai.preferencesSaved')}</p>
                         <div className="text-sm text-muted space-y-1">
                           {message.cardData.allergies?.length ? (
                             <p>Allergies: {message.cardData.allergies.join(', ')}</p>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { formatLimit, subscriptionApi, type PlansResponse } from '../api/subscription';
+import { useTranslation } from 'react-i18next';
+import { subscriptionApi, type PlansResponse } from '../api/subscription';
 
 interface PricingSectionProps {
   onGetStarted: () => void;
@@ -53,6 +54,7 @@ function LimitRow({ label, value }: { label: string; value: string }) {
 }
 
 export function PricingSection({ onGetStarted }: PricingSectionProps) {
+  const { t } = useTranslation();
   // Start with fallbacks so Pro prices are visible above the fold of this section
   // even before / if the plans API responds.
   const [plans, setPlans] = useState<PlansResponse>(FALLBACK_PLANS);
@@ -80,51 +82,49 @@ export function PricingSection({ onGetStarted }: PricingSectionProps) {
       <div className="mx-auto max-w-5xl">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-[clamp(1.75rem,4vw,2.25rem)] font-semibold text-ink">
-            Free vs Pro
+            {t('pricing.title')}
           </h2>
           <p className="mt-3 text-lg text-muted">
-            Full kitchen management on Free. Pro raises daily AI chat and upload limits — from{' '}
-            {free.aiMessagesPerDay} to {pro.aiMessagesPerDay} messages/day.
+            {t('pricing.subtitle', { free: free.aiMessagesPerDay, pro: pro.aiMessagesPerDay })}
           </p>
           {plans.trialDays ? (
             <p className="mt-2 text-sm text-herb">
-              Start a {plans.trialDays}-day Pro trial when you upgrade.
+              {t('pricing.trial', { days: plans.trialDays })}
             </p>
           ) : null}
         </div>
 
         <div className="mt-12 grid gap-8 lg:grid-cols-3">
           <div className="border border-line bg-linen p-8">
-            <p className="text-sm font-semibold uppercase tracking-widest text-muted">Free</p>
+            <p className="text-sm font-semibold uppercase tracking-widest text-muted">{t('pricing.free')}</p>
             <p className="mt-3 font-display text-4xl font-semibold text-ink">$0</p>
-            <p className="mt-1 text-sm text-muted">Forever</p>
+            <p className="mt-1 text-sm text-muted">{t('pricing.forever')}</p>
             <ul className="mt-8">
-              <LimitRow label="Pantry, shopping, calendar" value="Full access" />
-              <LimitRow label="AI chat" value={`${free.aiMessagesPerDay} / day`} />
-              <LimitRow label="Recipes" value={`Up to ${free.maxRecipes}`} />
-              <LimitRow label="Image uploads" value={`${free.imageUploadsPerMonth} / month`} />
+              <LimitRow label={t('pricing.pantryShoppingCalendar')} value={t('pricing.fullAccess')} />
+              <LimitRow label={t('pricing.aiChat')} value={t('pricing.perDay', { count: free.aiMessagesPerDay })} />
+              <LimitRow label={t('pricing.recipes')} value={t('pricing.upTo', { count: free.maxRecipes })} />
+              <LimitRow label={t('pricing.imageUploads')} value={t('pricing.perMonthLimit', { count: free.imageUploadsPerMonth })} />
             </ul>
             <button type="button" onClick={onGetStarted} className="btn-secondary mt-8 w-full">
-              Sign up free
+              {t('pricing.signUp')}
             </button>
           </div>
 
           {plans.plans.map((plan) => (
             <div key={plan.name} className="border border-herb bg-sage/20 p-8">
-              <p className="text-sm font-semibold uppercase tracking-widest text-herb">Pro</p>
+              <p className="text-sm font-semibold uppercase tracking-widest text-herb">{t('pricing.pro')}</p>
               <p className="mt-3 font-display text-4xl font-semibold text-ink">{plan.priceDisplay}</p>
               <p className="mt-1 text-sm text-muted">
-                per {plan.billingPeriod === 'yearly' ? 'year' : 'month'}
-                {plan.billingPeriod === 'yearly' ? ' · save ~33%' : ''}
+                {plan.billingPeriod === 'yearly' ? t('pricing.perYear') : t('pricing.perMonth')}
               </p>
               <ul className="mt-8">
-                <LimitRow label="AI chat" value={`${pro.aiMessagesPerDay} / day`} />
-                <LimitRow label="Recipes" value={formatLimit(pro.maxRecipes)} />
-                <LimitRow label="Image uploads" value={formatLimit(pro.imageUploadsPerMonth)} />
-                <LimitRow label="Priority support" value="Included" />
+                <LimitRow label={t('pricing.aiChat')} value={t('pricing.perDay', { count: pro.aiMessagesPerDay })} />
+                <LimitRow label={t('pricing.recipes')} value={pro.maxRecipes < 0 ? t('pricing.unlimited') : String(pro.maxRecipes)} />
+                <LimitRow label={t('pricing.imageUploads')} value={pro.imageUploadsPerMonth < 0 ? t('pricing.unlimited') : t('pricing.perMonthLimit', { count: pro.imageUploadsPerMonth })} />
+                <LimitRow label={t('pricing.prioritySupport')} value={t('pricing.included')} />
               </ul>
               <button type="button" onClick={onGetStarted} className="btn-primary mt-8 w-full">
-                Start with {plan.billingPeriod === 'yearly' ? 'annual' : 'monthly'} Pro
+                {plan.billingPeriod === 'yearly' ? t('pricing.startAnnual') : t('pricing.startMonthly')}
               </button>
             </div>
           ))}

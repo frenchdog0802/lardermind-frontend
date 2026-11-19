@@ -123,16 +123,37 @@ export function shortagesNotOnList<T extends ShortageLike>(
   shortages: T[],
   shoppingList: ShoppingRowLike[],
 ): T[] {
-  return shortages.filter((s) => {
-    const key = shortageNameKey(s.name);
-    let have = 0;
-    for (const row of shoppingList) {
-      if (row.checked || shortageNameKey(row.name) !== key) continue;
-      const q = rowQtyInUnit(Number(row.quantity) || 0, row.unit, s.unit);
-      if (q != null) have += q;
-    }
-    return have + 1e-6 < shortageDeficit(s);
-  });
+  return shortages.filter((s) => qtyStillToBuy(s.name, s.unit, shortageDeficit(s), shoppingList) > 1e-6);
+}
+
+/** Quantity of `name` already on unchecked shopping rows, expressed in `unit` (0 if none / incompatible). */
+export function qtyOnShoppingList(
+  name: string,
+  unit: string | null | undefined,
+  shoppingList: ShoppingRowLike[],
+): number {
+  const key = shortageNameKey(name);
+  let have = 0;
+  for (const row of shoppingList) {
+    if (row.checked || shortageNameKey(row.name) !== key) continue;
+    const q = rowQtyInUnit(Number(row.quantity) || 0, row.unit, unit);
+    if (q != null) have += q;
+  }
+  return have;
+}
+
+/**
+ * What is still left to add for a need once rows already on the list are counted. Adding
+ * the full need on top of a partially covered row (e.g. 1 clove on the list, 4 needed)
+ * would double count (list 5 vs calendar 4); only the remainder is ever added.
+ */
+export function qtyStillToBuy(
+  name: string,
+  unit: string | null | undefined,
+  need: number,
+  shoppingList: ShoppingRowLike[],
+): number {
+  return round(Math.max(0, need - qtyOnShoppingList(name, unit, shoppingList)));
 }
 
 /** "Rice 150 g" label for banners and per-meal rows (deficit, not gross need). */
