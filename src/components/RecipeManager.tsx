@@ -10,6 +10,7 @@ import { Loading } from './Loading';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
 import { fromBase, resolveIngredientUnits, type MeasurementSystem } from '../utils/units';
 import { AppHeader } from './AppHeader';
+import { hasEmptyIngredientName, searchIngredientNames } from '../utils/ingredientSearch';
 
 
 interface RecipeManagerProps {
@@ -210,7 +211,7 @@ export function RecipeManager({
         unit_kind: preferred.kind,
         base_unit: pantryItem.base_unit,
         default_display_unit: pantryItem.default_display_unit,
-        ingredient_id: pantryItem.id,
+        ingredient_id: pantryItem.id || undefined,
       };
       setSelectedRecipe({
         ...selectedRecipe,
@@ -225,7 +226,7 @@ export function RecipeManager({
         unit_kind: preferred.kind,
         base_unit: pantryItem.base_unit,
         default_display_unit: pantryItem.default_display_unit,
-        ingredient_id: pantryItem.id,
+        ingredient_id: pantryItem.id || undefined,
       };
       setNewRecipe({
         ...newRecipe,
@@ -411,9 +412,17 @@ export function RecipeManager({
 
   const getFilteredPantryItems = (query: string) => {
     // Removed fetchAllIngredients call to prevent infinite loop; filter locally after initial fetch
-    if (!query.trim()) return ingredients.slice(0, 10); // Show first 10 if no query
-    return ingredients.filter(item => item.name.toLowerCase().includes(query.toLowerCase()));
+    // Case / plural tolerant, with a built-in common-ingredient list so "Egg" always suggests.
+    return searchIngredientNames(query, ingredients, 10) as IngredientEntry[];
   };
+
+  // Re-validate as the user edits: once every ingredient has a name the error goes away
+  // and Save works again (it used to stay stuck after the field was fixed).
+  useEffect(() => {
+    if (!newRecipeError) return;
+    const list = isEditing && selectedRecipe ? selectedRecipe.ingredients : newRecipe.ingredients;
+    if (!hasEmptyIngredientName(list)) setNewRecipeError('');
+  }, [newRecipeError, isEditing, selectedRecipe, newRecipe.ingredients]);
 
   // Handle starting to add a recipe from a folder
   const handleAddRecipeInFolder = (folder: Folder) => {
@@ -761,10 +770,12 @@ export function RecipeManager({
                       </button>
                     </div>)}
                   </div>
+                  {newRecipeError && <p className="text-herb text-sm" role="alert">{newRecipeError}</p>}
                   <div className="flex gap-2 pt-4">
                     <button onClick={() => {
                       setSelectedRecipe(null);
                       setIsEditing(false);
+                      setNewRecipeError('');
                     }} className="w-1/2 bg-sage/40 text-ink py-2 rounded-lg">
                       Cancel
                     </button>
@@ -978,7 +989,7 @@ export function RecipeManager({
                     </button>
                   </div>)}
                 </div>
-                {newRecipeError && <p className="text-herb text-sm mb-2">{newRecipeError}</p>}
+                {newRecipeError && <p className="text-herb text-sm mb-2" role="alert">{newRecipeError}</p>}
                 <button onClick={handleSaveRecipe} disabled={!newRecipe.meal_name.trim() || newRecipe.ingredients.length === 0} className={`w-full py-3 px-4 rounded-xl font-medium ${newRecipe.meal_name.trim() && newRecipe.ingredients.length > 0 ? 'bg-herb hover:bg-herb-deep text-white' : 'bg-sage/40 text-muted cursor-not-allowed'} transition-colors`}>
                   Save recipe
                 </button>
