@@ -292,6 +292,8 @@
     "syncToPantryOffline": "需連線才能將項目加入庫存"
   },
   "recipes": {
+    "uploadingImage": "圖片上傳中…",
+    "uploadFailed": "無法上傳該圖片，請再試一次。",
     "title": "食譜管理",
     "categories": "分類",
     "folder": "資料夾",
@@ -401,6 +403,10 @@
     "pantryAddedItems": "已將 {{count}} 項加入庫存",
     "pantryUpdatedItems": "已更新庫存中的 {{count}} 項",
     "pantryRemovedItems": "已從庫存移除 {{count}} 項",
+    "approveTitle": "要核准這些變更嗎？",
+    "approve": "核准",
+    "applying": "套用中…",
+    "reject": "拒絕",
     "approvalFailed": "無法送出這個決定，請再試一次。",
     "approvalPendingReminder": "有一個操作正在等待你確認。請點選確認或拒絕，或輸入「好」或「不要」。",
     "demoFallback": "好問題！免費註冊後，就能依你的冰箱、家人偏好與行程拿到個人化建議。",

@@ -1,4 +1,5 @@
 import {
+  memo,
   useState,
   useEffect,
   useMemo,
@@ -43,6 +44,125 @@ interface PantryInventoryProps {
     onAskAi?: (prompt: string) => void;
 }
 
+interface PantryRowProps {
+    item: PantryItem;
+    isEditing: boolean;
+    /** Only meaningful for the row being edited (so other rows keep stable props). */
+    draft: string;
+    measurementSystem: MeasurementSystem;
+    onUpdateQuantity: (itemName: string, amount: number) => void;
+    onStartEdit: (item: PantryItem) => void;
+    onDraftChange: (value: string) => void;
+    onCommitEdit: (item: PantryItem) => void;
+    onCancelEdit: () => void;
+    onRemove: (itemName: string) => void;
+}
+
+/** Memoised: a search keystroke or a toast only re-renders rows whose props changed. */
+const PantryRow = memo(function PantryRow({
+    item,
+    isEditing,
+    draft,
+    measurementSystem,
+    onUpdateQuantity,
+    onStartEdit,
+    onDraftChange,
+    onCommitEdit,
+    onCancelEdit,
+    onRemove,
+}: PantryRowProps) {
+    const { t } = useTranslation();
+    const planned = item.item_planned || 0;
+    const toBuy = item.item_to_buy || 0;
+    const isOut = (item.quantity || 0) <= 0;
+
+    return (
+        <div className={`flex items-center gap-3 px-4 py-3.5 ${isOut ? 'bg-amber-50/40' : ''}`}>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                    <h3 className="text-base font-semibold text-ink truncate capitalize">{item.name}</h3>
+                </div>
+                {(planned > 0 || toBuy > 0) && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm">
+                        {planned > 0 && (
+                            <span className="text-muted">
+                                Planned <span className="font-semibold text-ink">{planned}</span>
+                            </span>
+                        )}
+                        {toBuy > 0 && (
+                            <span className="text-amber-800">
+                                To buy <span className="font-semibold">{toBuy}</span>
+                            </span>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                    onClick={() => onUpdateQuantity(item.name, -stepForUnit(item.unit))}
+                    className="w-9 h-9 flex items-center justify-center rounded-lg bg-sage/50 hover:bg-sage text-ink transition-colors"
+                    aria-label={`Decrease ${item.name}`}
+                >
+                    <MinusIcon size={16} />
+                </button>
+                <div className="min-w-[3.25rem] text-center">
+                    {isEditing ? (
+                        <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="any"
+                            autoFocus
+                            value={draft}
+                            onChange={e => onDraftChange(e.target.value)}
+                            onBlur={() => onCommitEdit(item)}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') onCommitEdit(item);
+                                if (e.key === 'Escape') onCancelEdit();
+                            }}
+                            aria-label={t('pantry.editQuantity', { name: item.name })}
+                            className="w-20 rounded-lg border border-line px-2 py-1 text-center text-base font-bold tabular-nums"
+                        />
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => onStartEdit(item)}
+                            title={t('pantry.editQuantity', { name: item.name })}
+                            aria-label={t('pantry.editQuantity', { name: item.name })}
+                            className={`text-lg font-bold tabular-nums leading-none ${isOut ? 'text-amber-800' : 'text-ink'}`}
+                        >
+                            <QuantityLabel
+                                quantity={item.quantity}
+                                unit={item.unit}
+                                unitKind={item.unit_kind}
+                                baseUnit={item.base_unit}
+                                defaultDisplayUnit={item.default_display_unit}
+                                measurementSystem={measurementSystem}
+                            />
+                        </button>
+                    )}
+                </div>
+                <button
+                    onClick={() => onUpdateQuantity(item.name, stepForUnit(item.unit))}
+                    className="w-9 h-9 flex items-center justify-center rounded-lg bg-herb hover:bg-herb-deep text-white transition-colors"
+                    aria-label={`Increase ${item.name}`}
+                >
+                    <PlusIcon size={16} />
+                </button>
+            </div>
+
+            <button
+                onClick={() => onRemove(item.name)}
+                className="p-2 rounded-lg text-muted hover:text-herb hover:bg-sage/50 transition-colors shrink-0"
+                aria-label={`Remove ${item.name}`}
+            >
+                <TrashIcon size={16} />
+            </button>
+        </div>
+    );
+});
+
 export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: PantryInventoryProps) {
     const { t } = useTranslation();
     const {
@@ -59,7 +179,10 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
     } = usePantry();
 
     const measurementSystem = (userSettings.measurement_unit === 'imperial' ? 'imperial' : 'metric') as MeasurementSystem;
-    const [pantryItems, setPantryItems] = useState<PantryItem[]>(oriPantryItems);
+    // The context list is the single source of truth (no local copy to keep in sync).
+    const pantryItems = oriPantryItems;
+    const pantryItemsRef = useRef(pantryItems);
+    pantryItemsRef.current = pantryItems;
     const [searchQuery, setSearchQuery] = useState('');
     const [newItem, setNewItem] = useState({
         name: '',
@@ -128,12 +251,8 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         fetchAllPantryItems();
         void fetchAllIngredients(null);
         void fetchAllShoppingListItems();
-    }, []);
+    }, [fetchAllPantryItems, fetchAllIngredients, fetchAllShoppingListItems]);
 
-    // Sync oriPantryItems to local pantryItems
-    useEffect(() => {
-        setPantryItems(oriPantryItems);
-    }, [oriPantryItems]);
 
     // ?????????????????
     const handleSelectIngredient = (ingredient: IngredientEntry) => {
@@ -148,11 +267,11 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         setSelectedIndex(-1);
     };
 
-    const showToast = (text: string, undo?: () => void) => {
+    const showToast = useCallback((text: string, undo?: () => void) => {
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ text, undo });
         toastTimerRef.current = setTimeout(() => setToast(null), undo ? UNDO_TOAST_MS : 3500);
-    };
+    }, []);
 
     useEffect(() => {
         return () => {
@@ -160,30 +279,38 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
         };
     }, []);
 
-    const startEditingQuantity = (item: PantryItem) => {
+    // Stable row handlers (they read the latest list/draft through refs) so memoised rows
+    // are not re-rendered by unrelated state such as the search box.
+    const editingDraftRef = useRef(editingDraft);
+    editingDraftRef.current = editingDraft;
+
+    const startEditingQuantity = useCallback((item: PantryItem) => {
         setEditingId(item.id);
         setEditingDraft(String(item.quantity));
-    };
+    }, []);
 
-    const commitEditingQuantity = (item: PantryItem) => {
-        const value = Number(editingDraft);
+    const cancelEditingQuantity = useCallback(() => setEditingId(null), []);
+
+    const commitEditingQuantity = useCallback((item: PantryItem) => {
+        const draft = editingDraftRef.current;
+        const value = Number(draft);
         setEditingId(null);
-        if (editingDraft.trim() === '' || !Number.isFinite(value) || value < 0) return;
+        if (draft.trim() === '' || !Number.isFinite(value) || value < 0) return;
         if (value !== item.quantity) {
             updatePantryItem({ ...item, quantity: value });
         }
-    };
+    }, [updatePantryItem]);
 
-    const handleUpdateQuantity = (itemName: string, amount: number) => {
-        const item = pantryItems.find(item => item.name === itemName);
+    const handleUpdateQuantity = useCallback((itemName: string, amount: number) => {
+        const item = pantryItemsRef.current.find(item => item.name === itemName);
         if (item) {
             const newQuantity = Number((item.quantity + amount).toFixed(10));
             updatePantryItem({ ...item, quantity: Math.max(0, newQuantity) });
         }
-    };
+    }, [updatePantryItem]);
 
-    const handleRemoveItem = (itemName: string) => {
-        const item = pantryItems.find(item => item.name === itemName);
+    const handleRemoveItem = useCallback((itemName: string) => {
+        const item = pantryItemsRef.current.find(item => item.name === itemName);
         if (item && removePantryItem) {
             removePantryItem(item.id);
             const { id: _removedId, ...restoreFields } = item;
@@ -192,7 +319,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                 setToast(null);
             });
         }
-    };
+    }, [removePantryItem, addPantryItem, showToast, t]);
 
     const handleAddItem = () => {
         if (!newItem.name.trim()) return;
@@ -576,100 +703,21 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                         </div>
                     ) : (
                         <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden divide-y divide-line">
-                            {filteredItems.map(item => {
-                                const planned = item.item_planned || 0;
-                                const toBuy = item.item_to_buy || 0;
-                                const isOut = (item.quantity || 0) <= 0;
-
-                                return (
-                                    <div
-                                        key={item.id || item.name}
-                                        className={`flex items-center gap-3 px-4 py-3.5 ${isOut ? 'bg-amber-50/40' : ''}`}
-                                    >
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-baseline gap-2">
-                                                <h3 className="text-base font-semibold text-ink truncate capitalize">{item.name}</h3>
-                                            </div>
-                                            {(planned > 0 || toBuy > 0) && (
-                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm">
-                                                    {planned > 0 && (
-                                                        <span className="text-muted">
-                                                            Planned <span className="font-semibold text-ink">{planned}</span>
-                                                        </span>
-                                                    )}
-                                                    {toBuy > 0 && (
-                                                        <span className="text-amber-800">
-                                                            To buy <span className="font-semibold">{toBuy}</span>
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                            <button
-                                                onClick={() => handleUpdateQuantity(item.name, -stepForUnit(item.unit))}
-                                                className="w-9 h-9 flex items-center justify-center rounded-lg bg-sage/50 hover:bg-sage text-ink transition-colors"
-                                                aria-label={`Decrease ${item.name}`}
-                                            >
-                                                <MinusIcon size={16} />
-                                            </button>
-                                            <div className="min-w-[3.25rem] text-center">
-                                                {editingId === item.id ? (
-                                                    <input
-                                                        type="number"
-                                                        inputMode="decimal"
-                                                        min={0}
-                                                        step="any"
-                                                        autoFocus
-                                                        value={editingDraft}
-                                                        onChange={e => setEditingDraft(e.target.value)}
-                                                        onBlur={() => commitEditingQuantity(item)}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') commitEditingQuantity(item);
-                                                            if (e.key === 'Escape') setEditingId(null);
-                                                        }}
-                                                        aria-label={t('pantry.editQuantity', { name: item.name })}
-                                                        className="w-20 rounded-lg border border-line px-2 py-1 text-center text-base font-bold tabular-nums"
-                                                    />
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => startEditingQuantity(item)}
-                                                        title={t('pantry.editQuantity', { name: item.name })}
-                                                        aria-label={t('pantry.editQuantity', { name: item.name })}
-                                                        className={`text-lg font-bold tabular-nums leading-none ${isOut ? 'text-amber-800' : 'text-ink'}`}
-                                                    >
-                                                        <QuantityLabel
-                                                            quantity={item.quantity}
-                                                            unit={item.unit}
-                                                            unitKind={item.unit_kind}
-                                                            baseUnit={item.base_unit}
-                                                            defaultDisplayUnit={item.default_display_unit}
-                                                            measurementSystem={measurementSystem}
-                                                        />
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <button
-                                                onClick={() => handleUpdateQuantity(item.name, stepForUnit(item.unit))}
-                                                className="w-9 h-9 flex items-center justify-center rounded-lg bg-herb hover:bg-herb-deep text-white transition-colors"
-                                                aria-label={`Increase ${item.name}`}
-                                            >
-                                                <PlusIcon size={16} />
-                                            </button>
-                                        </div>
-
-                                        <button
-                                            onClick={() => handleRemoveItem(item.name)}
-                                            className="p-2 rounded-lg text-muted hover:text-herb hover:bg-sage/50 transition-colors shrink-0"
-                                            aria-label={`Remove ${item.name}`}
-                                        >
-                                            <TrashIcon size={16} />
-                                        </button>
-                                    </div>
-                                );
-                            })}
+                            {filteredItems.map(item => (
+                                <PantryRow
+                                    key={item.id || item.name}
+                                    item={item}
+                                    isEditing={editingId === item.id}
+                                    draft={editingId === item.id ? editingDraft : ''}
+                                    measurementSystem={measurementSystem}
+                                    onUpdateQuantity={handleUpdateQuantity}
+                                    onStartEdit={startEditingQuantity}
+                                    onDraftChange={setEditingDraft}
+                                    onCommitEdit={commitEditingQuantity}
+                                    onCancelEdit={cancelEditingQuantity}
+                                    onRemove={handleRemoveItem}
+                                />
+                            ))}
                         </div>
                     )}
                 </main>

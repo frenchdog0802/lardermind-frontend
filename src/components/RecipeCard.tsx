@@ -14,7 +14,7 @@ export function RecipeCard({ recipe, onSelect, readiness, missingIngredient }: R
       onClick={onSelect}
     >
       <div className="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden">
-        <img src={recipe.image} alt={recipe.name} className="w-full h-full object-cover" />
+        <img src={recipe.image} alt={recipe.name} width={96} height={96} loading="lazy" decoding="async" className="w-full h-full object-cover" />
       </div>
       <div className="flex-1 flex flex-col justify-between min-w-0">
         <div>

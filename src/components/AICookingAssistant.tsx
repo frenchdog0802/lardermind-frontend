@@ -5,6 +5,8 @@
   useMemo,
   useCallback,
   useSyncExternalStore,
+  lazy,
+  Suspense,
   type ChangeEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +22,17 @@ import {
   type RecognizedPantryItem,
 } from '../api/pantryVision';
 import { RecipeSuggestion } from '../api/types';
-import ChatMessageContent from './ChatMessageContent';
+// react-markdown + remark-gfm are heavy; load them after the first paint of the chat shell.
+const ChatMessageContent = lazy(() => import('./ChatMessageContent'));
+
+/** Plain-text stand-in with the same wrapper so the bubble does not jump when markdown loads. */
+function ChatMessageFallback({ content, variant }: { content: string; variant: 'user' | 'assistant' }) {
+  return (
+    <div className={`chat-md text-sm break-words whitespace-pre-wrap ${variant === 'user' ? 'chat-md-user' : 'chat-md-assistant'}`}>
+      {content}
+    </div>
+  );
+}
 import { ChatComposer } from './ChatComposer';
 import { AppHeader } from './AppHeader';
 import { ChatEmptyState, SuggestedPromptCard } from './ChatEmptyState';
@@ -543,7 +555,7 @@ export function AICookingAssistant({
     if (!pendingApproval) return null;
     return (
       <div className="mt-3 rounded-xl border border-line bg-surface p-4">
-        <p className="text-sm font-medium text-ink">Approve these changes?</p>
+        <p className="text-sm font-medium text-ink">{t('ai.approveTitle')}</p>
         <ul className="mt-2 space-y-1 text-xs text-muted">
           {pendingApproval.pendingTools.map((tool, index) => (
             <li key={`${tool.name}-${index}`}>
@@ -559,7 +571,7 @@ export function AICookingAssistant({
             onClick={() => void handleResume('approve')}
             className="flex-1 bg-herb text-white py-2 rounded-lg text-sm disabled:opacity-50"
           >
-            {resumeInFlight ? 'Applying…' : 'Approve'}
+            {resumeInFlight ? t('ai.applying') : t('ai.approve')}
           </button>
           <button
             type="button"
@@ -567,7 +579,7 @@ export function AICookingAssistant({
             onClick={() => void handleResume('reject')}
             className="flex-1 bg-sage/40 text-ink py-2 rounded-lg text-sm disabled:opacity-50"
           >
-            Reject
+            {t('ai.reject')}
           </button>
         </div>
       </div>
@@ -1180,10 +1192,19 @@ export function AICookingAssistant({
                         </div>
                       ) : (
                         <>
-                          <ChatMessageContent
-                            content={message.content}
-                            variant={message.role === 'user' ? 'user' : 'assistant'}
-                          />
+                          <Suspense
+                            fallback={
+                              <ChatMessageFallback
+                                content={message.content}
+                                variant={message.role === 'user' ? 'user' : 'assistant'}
+                              />
+                            }
+                          >
+                            <ChatMessageContent
+                              content={message.content}
+                              variant={message.role === 'user' ? 'user' : 'assistant'}
+                            />
+                          </Suspense>
                           {message.streaming && (
                             <span
                               aria-hidden="true"

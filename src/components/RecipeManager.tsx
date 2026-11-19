@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { splitInstructionSteps } from '../utils/recipeSteps';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, SearchIcon, EditIcon, XIcon, ImageIcon, FolderIcon, ChevronRightIcon, HomeIcon, MoreVerticalIcon, FolderPlusIcon, PencilIcon, AlertCircleIcon } from 'lucide-react';
 import { usePantry } from '../contexts/pantryContext';
 import { IngredientEntry, Folder, Recipe } from '../api/types';
 import { ImageUploadApi } from '../api/ImageUploader';
-import { compressImage } from '../utils/imageHelper';
 import { Loading } from './Loading';
 import { UnitSelect, QuantityLabel, preferredUnitForIngredient } from './UnitSelect';
 import { fromBase, resolveIngredientUnits, type MeasurementSystem } from '../utils/units';
@@ -19,6 +18,82 @@ interface RecipeManagerProps {
   onAskAi?: (prompt: string) => void;
   selectedRecipeId?: string | null;
   onSelectedRecipeHandled?: () => void;
+}
+
+interface RecipeRowProps {
+  recipe: Recipe;
+  hasImage: boolean;
+  onOpen: (recipe: Recipe) => void;
+  onEdit: (recipe: Recipe) => void;
+  onDelete: (recipeId: string) => void;
+}
+
+/** Memoised so typing in the search box only re-renders rows whose recipe changed. */
+const RecipeRow = memo(function RecipeRow({ recipe, hasImage, onOpen, onEdit, onDelete }: RecipeRowProps) {
+  return (
+    <li className="p-4">
+      <div className="flex justify-between">
+        <div className="flex-1 cursor-pointer" onClick={() => onOpen(recipe)}>
+          <div className="flex items-center mb-1">
+            {hasImage && <ImageIcon size={16} className="ml-2 text-muted" />}
+          </div>
+          {/* Fixed: Added missing meal_name display */}
+          <h3 className="font-medium text-ink mb-1">
+            {recipe.meal_name}
+          </h3>
+          <p className="text-muted text-xs mt-1">
+            {recipe.ingredients.length} ingredient
+            {recipe.ingredients.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <div className="flex flex-col space-y-2">
+          <button onClick={() => onEdit(recipe)} className="p-1.5 rounded-full hover:bg-sage/50 text-herb" aria-label="Edit recipe">
+            <EditIcon size={18} />
+          </button>
+          <button onClick={() => onDelete(recipe.id)} className="p-1.5 rounded-full hover:bg-sage/50 text-herb" aria-label="Delete recipe">
+            <TrashIcon size={18} />
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+});
+
+function UploadImageControl({
+  uploading,
+  error,
+  onChange,
+}: {
+  uploading: boolean;
+  error: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <label
+        className={`bg-linen text-ink py-2 px-4 rounded-lg border border-line inline-flex items-center gap-2 transition-colors ${
+          uploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-sage/50'
+        }`}
+        aria-busy={uploading}
+      >
+        {uploading ? (
+          <>
+            <span className="animate-spin rounded-full h-4 w-4 border-2 border-line border-t-herb" aria-hidden="true" />
+            <span>{t('recipes.uploadingImage')}</span>
+          </>
+        ) : (
+          'Upload Image'
+        )}
+        <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={onChange} />
+      </label>
+      {error ? (
+        <p role="alert" className="mt-2 text-sm text-red-600">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
 }
 
 export function RecipeManager({
@@ -64,6 +139,8 @@ export function RecipeManager({
   const [showIngredientDropdown, setShowIngredientDropdown] = useState(false);
   const ingredientDropdownRef = useRef<HTMLDivElement>(null);
   const [newRecipeError, setNewRecipeError] = useState<string>('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState('');
   const [newRecipe, setNewRecipe] = useState<Recipe>({
     id: '',
     meal_name: '',
@@ -80,7 +157,7 @@ export function RecipeManager({
     fetchAllRecipes();
     fetchAllFolders();
     fetchAllIngredients(null); // Fetch all ingredients initially to enable local filtering
-  }, []);
+  }, [fetchAllRecipes, fetchAllFolders, fetchAllIngredients]);
 
   useEffect(() => {
     setRecipes(storedRecipes);
@@ -124,13 +201,17 @@ export function RecipeManager({
     }
   };
 
-  const filteredRecipes = recipes.filter(recipe => {
-    if (currentFolder && recipeFolderId(recipe) !== currentFolder.id) {
-      return false;
-    }
-    const matchesSearch = recipe.ingredients && recipe.ingredients.some(item => item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase())) || recipe.meal_name && recipe.meal_name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredRecipes = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return recipes.filter(recipe => {
+      if (currentFolder && recipeFolderId(recipe) !== currentFolder.id) {
+        return false;
+      }
+      const matchesSearch = recipe.ingredients && recipe.ingredients.some(item => item.name && item.name.toLowerCase().includes(q)) || recipe.meal_name && recipe.meal_name.toLowerCase().includes(q);
+      return matchesSearch;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recipeFolderId is a pure helper
+  }, [recipes, currentFolder, searchQuery]);
 
   // Handle creating a new folder
   const handleCreateFolder = () => {
@@ -182,7 +263,7 @@ export function RecipeManager({
     deleteFolder(folderToDelete.id);
   };
 
-  const toEditRecipe = (recipe: Recipe): Recipe => ({
+  const toEditRecipe = useCallback((recipe: Recipe): Recipe => ({
     ...recipe,
     ingredients: recipe.ingredients.map(item => {
       const preferred = preferredUnitForIngredient(item, measurementSystem);
@@ -198,7 +279,7 @@ export function RecipeManager({
         unit_kind: resolved.kind,
       };
     }),
-  });
+  }), [measurementSystem]);
 
   const handleSelectIngredient = (pantryItem: IngredientEntry, index: number) => {
     const preferred = preferredUnitForIngredient(pantryItem, measurementSystem);
@@ -241,40 +322,42 @@ export function RecipeManager({
 
   // Handle image upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const input = e.target;
+    const file = input.files?.[0];
+    if (!file || uploadingImage) return;
 
+    setUploadingImage(true);
+    setImageUploadError('');
     try {
+      // browser-image-compression is large; only load it when someone actually uploads.
+      const { compressImage } = await import('../utils/imageHelper');
       const compressed = await compressImage(file);
 
       const res = await ImageUploadApi.upload(compressed);
 
       if (!res.success || !res.data) {
         console.error("Upload failed", res.message);
+        setImageUploadError(t('recipes.uploadFailed'));
         return;
       }
 
-      const image_url = res.data.image_url; // R2 media URL from /api/upload/image
+      const image = {
+        url: res.data.image_url, // R2 media URL from /api/upload/image
+        public_id: res.data.public_id,
+      };
 
       if (isEditing && selectedRecipe) {
-        setSelectedRecipe({
-          ...selectedRecipe,
-          image: {
-            url: image_url,
-            public_id: res.data.public_id,
-          }
-        });
+        setSelectedRecipe(prev => (prev ? { ...prev, image } : prev));
       } else {
-        setNewRecipe({
-          ...newRecipe,
-          image: {
-            url: image_url,
-            public_id: res.data.public_id,
-          }
-        });
+        setNewRecipe(prev => ({ ...prev, image }));
       }
     } catch (err) {
       console.error("Image upload error:", err);
+      setImageUploadError(t('recipes.uploadFailed'));
+    } finally {
+      setUploadingImage(false);
+      // allow re-selecting the same file after a failure
+      input.value = '';
     }
   };
 
@@ -405,10 +488,18 @@ export function RecipeManager({
     }
   };
 
-  const handleDeleteRecipe = (recipeId: string) => {
+  const handleDeleteRecipe = useCallback((recipeId: string) => {
     setRecipes(prev => prev.filter(r => r.id !== recipeId));
     deleteRecipe(recipeId);
-  };
+  }, [deleteRecipe]);
+  const handleOpenRecipe = useCallback((recipe: Recipe) => {
+    setSelectedRecipe(recipe);
+    setIsEditing(false);
+  }, []);
+  const handleEditRecipe = useCallback((recipe: Recipe) => {
+    setSelectedRecipe(toEditRecipe(recipe));
+    setIsEditing(true);
+  }, [toEditRecipe]);
 
   const getFilteredPantryItems = (query: string) => {
     // Removed fetchAllIngredients call to prevent infinite loop; filter locally after initial fetch
@@ -597,37 +688,14 @@ export function RecipeManager({
                   </button>
                 ) : null}
               </div> : <ul className="divide-y divide-line">
-                {filteredRecipes.map(recipe => <li key={recipe.id} className="p-4">
-                  <div className="flex justify-between">
-                    <div className="flex-1 cursor-pointer" onClick={() => {
-                      setSelectedRecipe(recipe);
-                      setIsEditing(false);
-                    }}>
-                      <div className="flex items-center mb-1">
-                        {hasRecipeImage(recipe) && <ImageIcon size={16} className="ml-2 text-muted" />}
-                      </div>
-                      {/* Fixed: Added missing meal_name display */}
-                      <h3 className="font-medium text-ink mb-1">
-                        {recipe.meal_name}
-                      </h3>
-                      <p className="text-muted text-xs mt-1">
-                        {recipe.ingredients.length} ingredient
-                        {recipe.ingredients.length !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <div className="flex flex-col space-y-2">
-                      <button onClick={() => {
-                        setSelectedRecipe(toEditRecipe(recipe));
-                        setIsEditing(true);
-                      }} className="p-1.5 rounded-full hover:bg-sage/50 text-herb" aria-label="Edit recipe">
-                        <EditIcon size={18} />
-                      </button>
-                      <button onClick={() => handleDeleteRecipe(recipe.id)} className="p-1.5 rounded-full hover:bg-sage/50 text-herb" aria-label="Delete recipe">
-                        <TrashIcon size={18} />
-                      </button>
-                    </div>
-                  </div>
-                </li>)}
+                {filteredRecipes.map(recipe => <RecipeRow
+                  key={recipe.id}
+                  recipe={recipe}
+                  hasImage={hasRecipeImage(recipe)}
+                  onOpen={handleOpenRecipe}
+                  onEdit={handleEditRecipe}
+                  onDelete={handleDeleteRecipe}
+                />)}
               </ul>}
             </div>
           </>}
@@ -688,12 +756,9 @@ export function RecipeManager({
                       <p className="text-muted mb-2">
                         Add a photo of your meal
                       </p>
-                      <label className="cursor-pointer bg-linen hover:bg-sage/50 text-ink py-2 px-4 rounded-lg border border-line inline-block transition-colors">
-                        Upload Image
-                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                      </label>
+                      <UploadImageControl uploading={uploadingImage} error={imageUploadError} onChange={handleImageUpload} />
                     </div> : <div className="relative rounded-xl overflow-hidden h-40">
-                      <img src={selectedRecipe.image!.url} alt="Meal" className="w-full h-full object-cover" />
+                      <img src={selectedRecipe.image!.url} alt="Meal" width={640} height={160} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                       <button onClick={() => handleImageRemove(selectedRecipe.image!.public_id)} className="absolute top-2 right-2 bg-surface/80 p-1 rounded-full hover:bg-surface text-herb" aria-label="Remove image">
                         <XIcon size={20} />
                       </button>
@@ -795,7 +860,7 @@ export function RecipeManager({
                     </div>
                   </div>
                   {hasRecipeImage(selectedRecipe) && <div className="rounded-xl overflow-hidden h-40 my-4">
-                    <img src={selectedRecipe.image!.url} alt="Meal" className="w-full h-full object-cover" />
+                    <img src={selectedRecipe.image!.url} alt="Meal" width={640} height={160} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   </div>}
                   <div className="border-t border-b border-line py-4">
                     <h4 className="font-medium text-ink mb-2">
@@ -890,18 +955,18 @@ export function RecipeManager({
                     <div className="border-2 border-dashed border-line rounded-xl p-6 text-center">
                       <ImageIcon size={32} className="mx-auto text-muted mb-2" />
                       <p className="text-muted mb-2">Add a photo of your Recipe</p>
-                      <label className="cursor-pointer bg-linen hover:bg-sage/50 text-ink py-2 px-4 rounded-lg border border-line inline-block transition-colors">
-                        Upload Image
-                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                      </label>
+                      <UploadImageControl uploading={uploadingImage} error={imageUploadError} onChange={handleImageUpload} />
                     </div>
                   ) : (
                     <div className="relative rounded-xl overflow-hidden aspect-[4/3]">
                       <img
                         src={newRecipe.image!.url}
                         alt="Recipe photo"
+                        width={640}
+                        height={480}
                         className="w-full h-full object-cover"
                         loading="lazy"
+                        decoding="async"
                       />
 
                       <button

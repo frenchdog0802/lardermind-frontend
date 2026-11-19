@@ -36,7 +36,7 @@ export function RecipeDetail({
       {/* Recipe Image */}
       {recipe.image?.url ? (
         <div className="w-full h-64 relative">
-          <img src={recipe.image.url} alt={recipe.meal_name} className="w-full h-full object-cover" />
+          <img src={recipe.image.url} alt={recipe.meal_name} width={1024} height={256} loading="lazy" decoding="async" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
           <div className="absolute bottom-0 left-0 right-0 p-6">
             <h2 className="text-2xl font-bold text-white">{recipe.meal_name}</h2>
