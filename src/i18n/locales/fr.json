@@ -546,7 +546,34 @@
       "privacy": "Confidentialité",
       "terms": "Conditions",
       "contact": "Contact",
-      "copyright": "© 2026 LarderMind. Tous droits réservés."
+      "copyright": "© 2026 LarderMind. Tous droits réservés.",
+      "mealime": "Alternative à Mealime"
+    },
+    "sample": {
+      "eyebrow": "Semaine d'exemple",
+      "title": "À quoi ressemble une semaine faite avec votre garde-manger",
+      "exampleLabel": "Simple exemple, pas un vrai plan. Le vôtre est créé à partir de ce que vous avez vraiment.",
+      "pantryNote": "Garde-manger de départ : cuisses de poulet, riz, œufs, oignons, ail, tomates en conserve, pâtes, épinards, huile d'olive.",
+      "planHeading": "5 dîners",
+      "minutes": "{{count}} min",
+      "meals": {
+        "mon": "Poulet à l'ail et riz",
+        "tue": "Pâtes aux épinards et tomates",
+        "wed": "Riz sauté aux légumes et à l'œuf",
+        "thu": "Œufs cuits à la tomate et feta",
+        "fri": "Poulet, épinards et tomates à la poêle"
+      },
+      "shoppingHeading": "Seulement ce qui manque",
+      "shopping": {
+        "i1": "Poivrons ×2",
+        "i2": "Petits pois surgelés ×1 sachet",
+        "i3": "Feta ×1 bloc",
+        "i4": "Citrons ×2",
+        "i5": "Basilic frais ×1 bouquet"
+      },
+      "cta": "Essayez avec votre frigo",
+      "pantryPrompt": "Mon garde-manger : cuisses de poulet, riz, œufs, oignons, ail, tomates en conserve, pâtes, épinards, huile d'olive. Planifie 5 dîners faciles en semaine pour 2 personnes et liste uniquement ce qui me manque.",
+      "freeProLine": "Gratuit : planifiez vos repas avec votre garde-manger. Pro (4,99 $/mois) : plus de requêtes IA et de fonctionnalités, 7 jours d'essai gratuit."
     }
   },
   "pricing": {
@@ -619,5 +646,28 @@
       "pasta": "500 g",
       "bag": "1 sachet"
     }
+  },
+  "mealime": {
+    "metaTitle": "Alternative à Mealime - Refaites votre semaine | LarderMind",
+    "metaDescription": "Mealime a fermé le 21 oct. 2026. LarderMind planifie une semaine de dîners à partir de votre garde-manger ou d'une photo de votre frigo, avec une liste de courses limitée à ce qui manque. Essai gratuit.",
+    "back": "Accueil LarderMind",
+    "eyebrow": "Alternative à Mealime",
+    "title": "Refaites votre semaine Mealime en quelques minutes",
+    "lead": "Mealime a fermé le 21 oct. 2026 et a supprimé les plans des utilisateurs sans possibilité d'export. LarderMind peut planifier votre prochaine semaine de dîners avec ce que vous avez déjà.",
+    "ctaButton": "Commencer avec une demande façon Mealime",
+    "ctaHint": "Ouvre un chat invité gratuit avec une demande de départ. Aucune inscription nécessaire pour essayer.",
+    "starterPrompt": "J'utilisais Mealime. Planifie 5 dîners faciles en semaine pour 2 personnes avec ce que j'ai :",
+    "whatTitle": "Ce qui est arrivé à Mealime",
+    "whatBody": "Mealime a fermé le 21 oct. 2026. Les plans de repas des utilisateurs ont été supprimés, sans moyen de les exporter. Impossible de les récupérer, mais vous pouvez repartir rapidement sur une nouvelle semaine.",
+    "howTitle": "Ce que fait LarderMind",
+    "bullet1": "Planifie une semaine de dîners à partir de ce qu'il y a dans votre garde-manger et votre frigo. Saisissez-le ou prenez une photo de votre frigo.",
+    "bullet2": "Crée une liste de courses avec uniquement ce qui manque.",
+    "bullet3": "Propose des recettes pour les repas planifiés.",
+    "bullet4": "Fonctionne en anglais, chinois, espagnol, français, allemand et japonais.",
+    "bullet5": "Formule gratuite disponible. Pro à 4,99 $/mois ou 39,99 $/an, avec 7 jours d'essai.",
+    "chatTitle": "Essayez maintenant",
+    "signUp": "S'inscrire gratuitement",
+    "login": "Se connecter",
+    "disclaimer": "LarderMind est un produit indépendant et n'est pas affilié à Mealime."
   }
 }

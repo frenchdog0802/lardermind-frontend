@@ -23,6 +23,8 @@ interface GuestChatBoxProps {
   className?: string;
   /** When set, UI strings ignore global appLanguage (marketing landing stays English). */
   fixedLanguage?: AppLanguage;
+  /** Prefill the input (not auto-sent). A new `nonce` re-applies the text and focuses the input. */
+  prefill?: { text: string; nonce: number } | null;
 }
 
 interface GuestMessage {
@@ -61,6 +63,7 @@ export function GuestChatBox({
   size = 'default',
   className = '',
   fixedLanguage,
+  prefill,
 }: GuestChatBoxProps) {
   const { t: tGlobal, i18n } = useTranslation();
   const t = useMemo(
@@ -81,6 +84,15 @@ export function GuestChatBox({
   } | null>(null);
   const [showSaveCta, setShowSaveCta] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const prefillNonce = prefill?.nonce;
+  const prefillText = prefill?.text;
+  useEffect(() => {
+    if (prefillNonce === undefined || !prefillText) return;
+    setInputValue(prefillText);
+    inputRef.current?.focus({ preventScroll: true });
+  }, [prefillNonce, prefillText]);
 
   useEffect(() => {
     setMessages((prev) => {
@@ -523,6 +535,7 @@ export function GuestChatBox({
             </button>
             <div className="relative flex-1">
               <input
+                ref={inputRef}
                 type="text"
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value)}

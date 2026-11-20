@@ -31,6 +31,9 @@ const AICookingAssistant = lazy(() =>
 const SubscriptionView = lazy(() =>
   import('./components/SubscriptionView').then((m) => ({ default: m.SubscriptionView })),
 );
+const MealimeAlternative = lazy(() =>
+  import('./components/MealimeAlternative').then((m) => ({ default: m.MealimeAlternative })),
+);
 const MarketingLanding = lazy(() =>
   import('./components/MarketingLanding').then((m) => ({ default: m.MarketingLanding })),
 );
@@ -107,6 +110,13 @@ function AppContent() {
     }
   }, [route]);
 
+  // Signed-in users have no use for the public SEO page: send them to the app.
+  useEffect(() => {
+    if (route !== 'mealime-alternative' || initializing || !isAuthenticated) return;
+    window.history.replaceState({}, '', '/');
+    setRoute('home');
+  }, [route, initializing, isAuthenticated]);
+
   // /pricing deep link: landing page scrolled to the pricing section.
   useEffect(() => {
     if (route !== 'pricing' || currentView !== 'landing') return;
@@ -124,6 +134,7 @@ function AppContent() {
     if (view) setCurrentView(view);
   };
   const goToLogin = () => goToRoute('login', '/login', 'login');
+  const goToSignUp = () => goToRoute('signup', '/signup', 'signup');
   const goToForgotPassword = () => goToRoute('forgot-password', '/forgot-password');
 
   useEffect(() => {
@@ -216,6 +227,13 @@ function AppContent() {
 
   if (route === 'not-found') {
     return <NotFound />;
+  }
+  if (route === 'mealime-alternative') {
+    return (
+      <Suspense fallback={<ViewFallback />}>
+        <MealimeAlternative onGetStarted={goToSignUp} onLogin={goToLogin} />
+      </Suspense>
+    );
   }
   if (route === 'forgot-password') {
     return <ForgotPassword onBackToLogin={goToLogin} />;

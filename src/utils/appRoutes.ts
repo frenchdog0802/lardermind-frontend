@@ -13,6 +13,7 @@ export type AppRoute =
   | 'pricing'
   | 'forgot-password'
   | 'reset-password'
+  | 'mealime-alternative'
   | 'not-found';
 
 const EXACT_ROUTES: Record<string, AppRoute> = {
@@ -24,7 +25,24 @@ const EXACT_ROUTES: Record<string, AppRoute> = {
   '/pricing': 'pricing',
   '/forgot-password': 'forgot-password',
   '/reset-password': 'reset-password',
+  '/mealime-alternative': 'mealime-alternative',
 };
+
+/**
+ * Public SEO pages. They are NOT in public/_redirects: the build emits a dedicated
+ * `<name>.html` per path (vite.config.js, seoPages) with its own head tags, which
+ * Cloudflare Pages serves at the extensionless URL.
+ */
+export const SEO_PAGES = [
+  {
+    path: '/mealime-alternative',
+    title: 'Mealime Alternative - Rebuild Your Week | LarderMind',
+    description:
+      "Mealime shut down on Oct 21, 2026. LarderMind plans a week of dinners from your pantry or a photo of your fridge, with a shopping list of only what's missing. Free to try.",
+    h1: 'Rebuild your Mealime week in minutes',
+    body: "Mealime shut down on Oct 21, 2026 and deleted users' plans with no export. LarderMind plans a week of dinners from what's in your pantry and fridge (type it in or snap a photo of your fridge), makes a shopping list of only what's missing, and has recipes. It works in English, Chinese, Spanish, French, German and Japanese. Free plan; Pro is $4.99/mo or $39.99/yr with a 7-day trial. LarderMind is not affiliated with Mealime. Please enable JavaScript to use the app.",
+  },
+] as const;
 
 /** Paths (besides `/`) that must be rewritten to `/` by the host. */
 export const SPA_REWRITE_PATHS = [
