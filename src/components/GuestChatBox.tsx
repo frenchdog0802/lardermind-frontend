@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { useTranslation } from 'react-i18next';
 import { RefreshCwIcon, SendIcon } from 'lucide-react';
 import { auth } from '../api/api-auth';
+import type { AppLanguage } from '../i18n/detect';
 import {
   chatApi,
   type ChatResponse,
@@ -21,7 +22,7 @@ interface GuestChatBoxProps {
   size?: 'default' | 'large';
   className?: string;
   /** When set, UI strings ignore global appLanguage (marketing landing stays English). */
-  fixedLanguage?: 'en' | 'zh';
+  fixedLanguage?: AppLanguage;
 }
 
 interface GuestMessage {

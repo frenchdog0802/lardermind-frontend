@@ -29,7 +29,7 @@ import { AppHeader } from './AppHeader';
 import { PantryImageReviewModal } from './PantryImageReviewModal';
 import { isAscii } from '../utils/isAscii';
 import { UNDO_TOAST_MS, shoppingBuyCount } from '../utils/shoppingListState';
-import { describeVisionFailure, VISION_ACCEPT } from '../utils/pantryVisionPicker';
+import { describeVisionFailure, prepareVisionImage, VISION_ACCEPT } from '../utils/pantryVisionPicker';
 import {
   mergeQuantities,
   resolveSelectedUnit,
@@ -415,13 +415,15 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
             e.target.value = '';
             if (!file) return;
 
-            const previewUrl = URL.createObjectURL(file);
             setRecognizing(true);
             setRecognizeError(null);
+            let previewUrl = '';
             try {
-                const res = await pantryVisionApi.recognize(file);
+                const prepared = await prepareVisionImage(file);
+                previewUrl = URL.createObjectURL(prepared);
+                const res = await pantryVisionApi.recognize(prepared);
                 if (!res.success || !res.data) {
-                    URL.revokeObjectURL(previewUrl);
+                    if (previewUrl) URL.revokeObjectURL(previewUrl);
                     // Pro / quota / sign-in gates come back as a failed response: say so.
                     const failure = describeVisionFailure(res);
                     setRecognizeError(
@@ -438,7 +440,7 @@ export function PantryInventory({ onBack: _onBack, onOpenMenu, onAskAi }: Pantry
                 setReviewPreviewUrl(previewUrl);
                 setReviewOpen(true);
             } catch {
-                URL.revokeObjectURL(previewUrl);
+                if (previewUrl) URL.revokeObjectURL(previewUrl);
                 setRecognizeError(t('pantryVision.errorRecognize'));
             } finally {
                 setRecognizing(false);

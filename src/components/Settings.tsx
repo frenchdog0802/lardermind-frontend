@@ -7,7 +7,7 @@ import { SubscriptionPanel } from './SubscriptionPanel';
 import { AppHeader } from './AppHeader';
 import { userPreferencesApi } from '../api/userPreferences';
 import type { UserPreferences } from '../api/types';
-import { AppLanguage, changeAppLanguage } from '../i18n';
+import { AppLanguage, SUPPORTED_LANGUAGES, changeAppLanguage, matchSupportedLanguage } from '../i18n';
 
 interface SettingsProps {
   onBack: () => void;
@@ -53,7 +53,7 @@ export function Settings({
     checkoutSuccess || checkoutCancelled ? 'subscription' : 'profile',
   );
   const [language, setLanguage] = useState<AppLanguage>(
-    i18n.language?.startsWith('zh') ? 'zh' : 'en'
+    matchSupportedLanguage(i18n.language) ?? 'en'
   );
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -345,32 +345,21 @@ export function Settings({
                   </h2>
                   <p className="text-sm text-muted">{t('settings.languageHint')}</p>
                   <div className="space-y-3">
-                    <div className="flex items-center">
-                      <input
-                        id="lang-en"
-                        name="language"
-                        type="radio"
-                        checked={language === 'en'}
-                        onChange={() => applyLanguage('en')}
-                        className="h-4 w-4 text-herb border-line"
-                      />
-                      <label htmlFor="lang-en" className="ml-3 block text-sm font-medium text-ink">
-                        {t('settings.langEn')}
-                      </label>
-                    </div>
-                    <div className="flex items-center">
-                      <input
-                        id="lang-zh"
-                        name="language"
-                        type="radio"
-                        checked={language === 'zh'}
-                        onChange={() => applyLanguage('zh')}
-                        className="h-4 w-4 text-herb border-line"
-                      />
-                      <label htmlFor="lang-zh" className="ml-3 block text-sm font-medium text-ink">
-                        {t('settings.langZh')}
-                      </label>
-                    </div>
+                    {SUPPORTED_LANGUAGES.map((l) => (
+                      <div key={l.code} className="flex items-center">
+                        <input
+                          id={`lang-${l.code}`}
+                          name="language"
+                          type="radio"
+                          checked={language === l.code}
+                          onChange={() => applyLanguage(l.code)}
+                          className="h-4 w-4 text-herb border-line"
+                        />
+                        <label htmlFor={`lang-${l.code}`} lang={l.htmlLang} className="ml-3 block text-sm font-medium text-ink">
+                          {l.native}
+                        </label>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

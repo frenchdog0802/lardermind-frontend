@@ -35,9 +35,12 @@ function ChatMessageFallback({ content, variant }: { content: string; variant: '
 }
 import { ChatComposer } from './ChatComposer';
 import { AppHeader } from './AppHeader';
+import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ChatEmptyState, SuggestedPromptCard } from './ChatEmptyState';
 import { Loading } from './Loading';
 import { PantryImageReviewModal } from './PantryImageReviewModal';
+import { describeVisionFailure, prepareVisionImage, VISION_ACCEPT } from '../utils/pantryVisionPicker';
 import {
   resolveChatBodyMode,
   resolveChatHeaderIsNewChat,
@@ -228,6 +231,8 @@ export function AICookingAssistant({
     );
   }, [t, i18n.language]);
 
+  const viewportHeight = useVisualViewportHeight();
+  const isMobile = useMediaQuery('(max-width: 639px)');
   const chatBodyMode = resolveChatBodyMode(isBootstrapping, messages.length);
   const headerTitle = resolveChatHeaderIsNewChat(isBootstrapping, messages.length)
     ? t('nav.newChat')
@@ -1002,15 +1007,22 @@ export function AICookingAssistant({
       e.target.value = '';
       if (!file) return;
 
-      const previewUrl = URL.createObjectURL(file);
       setRecognizing(true);
       setRecognizeError(null);
+      let previewUrl = '';
       try {
-        const res = await pantryVisionApi.recognize(file);
+        const prepared = await prepareVisionImage(file);
+        previewUrl = URL.createObjectURL(prepared);
+        const res = await pantryVisionApi.recognize(prepared);
         if (!res.success || !res.data) {
           URL.revokeObjectURL(previewUrl);
+          const failure = describeVisionFailure(res);
           setRecognizeError(
-            res.message || t('pantryVision.errorRecognize'),
+            failure === 'upgrade'
+              ? t('pantryVision.upgradeRequired')
+              : failure === 'sign_in'
+                ? t('pantryVision.signInRequired')
+                : res.message || t('pantryVision.errorRecognize'),
           );
           return;
         }
@@ -1019,7 +1031,7 @@ export function AICookingAssistant({
         setReviewPreviewUrl(previewUrl);
         setReviewOpen(true);
       } catch {
-        URL.revokeObjectURL(previewUrl);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
         setRecognizeError(t('pantryVision.errorRecognize'));
       } finally {
         setRecognizing(false);
@@ -1033,8 +1045,11 @@ export function AICookingAssistant({
       <input
         ref={attachInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
-        className="hidden"
+        accept={VISION_ACCEPT}
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        data-testid="chat-photo-input"
         onChange={(e) => {
           void handleAttachFileChange(e);
         }}
@@ -1055,6 +1070,8 @@ export function AICookingAssistant({
         attachDisabled={Boolean(pendingApproval)}
         attaching={recognizing}
         attachAriaLabel={t('pantryVision.attach')}
+        attachTitle={t('pantryVision.attachTooltip')}
+        placeholder={t('ai.composerHint')}
       />
       <PantryImageReviewModal
         open={reviewOpen}
@@ -1070,7 +1087,10 @@ export function AICookingAssistant({
   );
 
   return (
-    <div className="relative flex flex-col w-full h-[100dvh] min-h-screen bg-linen overflow-hidden">
+    <div
+      className="relative flex flex-col w-full h-[100dvh] bg-linen overflow-hidden"
+      style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0"
@@ -1089,17 +1109,27 @@ export function AICookingAssistant({
       />
 
       {isEmptyStage ? (
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center px-4 sm:px-6 py-8">
-          <div className="w-full max-w-3xl">
+        <>
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col px-4 sm:px-6 py-4 sm:py-8">
+          {/* my-auto centers when there is room but never clips the top when the keyboard shrinks the viewport */}
+          <div className="w-full max-w-3xl mx-auto my-auto">
             <ChatEmptyState
               suggestedPromptCards={suggestedPromptCards}
               onSelectPrompt={setInputValue}
               onViewPantry={onViewPantry}
               onViewShoppingList={onViewShoppingList}
+              onSnapFridge={handleAttachPantryImage}
+              snapDisabled={recognizing || isTyping || Boolean(pendingApproval)}
             />
-            <div className="mt-8 w-full">{composerField}</div>
+            {!isMobile && <div className="mt-8 w-full">{composerField}</div>}
           </div>
         </div>
+        {isMobile && (
+          <div className="shrink-0 bg-linen/95 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="max-w-3xl mx-auto w-full">{composerField}</div>
+          </div>
+        )}
+        </>
       ) : (
       <>
       <div className="flex-1 overflow-y-auto">

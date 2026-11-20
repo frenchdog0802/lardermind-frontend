@@ -17,7 +17,7 @@ import {
 import { mergeShoppingWrite } from '../api/shoppingSync';
 import { mealPlanApi } from '../api/mealPlan';
 import { userPreferencesApi } from '../api/userPreferences';
-import i18n, { resolveStoredLanguage } from '../i18n';
+import i18n, { matchSupportedLanguage, resolveStoredLanguage } from '../i18n';
 import { useAuth } from './authContext';
 import { splitInstructionSteps } from '../utils/recipeSteps';
 
@@ -269,7 +269,7 @@ export function PantryProvider({
   useEffect(() => {
     // Keep userSettings.language in sync with every language change (header switcher or Settings).
     const onChange = (lng: string) => {
-      const next = lng?.startsWith('zh') ? 'zh' : 'en';
+      const next = matchSupportedLanguage(lng) ?? 'en';
       setUserSettings(prev => (prev.language === next ? prev : { ...prev, language: next }));
     };
     i18n.on('languageChanged', onChange);
