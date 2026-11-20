@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { resolveAppRoute, SPA_REWRITE_PATHS } from './appRoutes.ts';
+import { resolveAppRoute, SEO_PAGES, SPA_REWRITE_PATHS } from './appRoutes.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -19,6 +19,8 @@ describe('resolveAppRoute', () => {
     assert.equal(resolveAppRoute('/reset-password'), 'reset-password');
     assert.equal(resolveAppRoute('/app'), 'home');
     assert.equal(resolveAppRoute('/app/pantry'), 'home');
+    assert.equal(resolveAppRoute('/mealime-alternative'), 'mealime-alternative');
+    assert.equal(resolveAppRoute('/mealime-alternative/'), 'mealime-alternative');
   });
 
   it('treats unknown paths as not found (was: home page)', () => {
@@ -58,6 +60,19 @@ describe('Cloudflare Pages routing config', () => {
   it('build emits 404.html from index.html', () => {
     const vite = readFileSync(join(root, 'vite.config.js'), 'utf8');
     assert.match(vite, /copyFileSync\(join\(dir, "index\.html"\), join\(dir, "404\.html"\)\)/);
-    assert.match(vite, /plugins: \[react\(\), spaNotFoundPage\(\)\]/);
+    assert.match(vite, /plugins: \[react\(\), spaNotFoundPage\(\), seoPages\(\)\]/);
+  });
+
+  it('serves public SEO pages from prerendered <path>.html, not an SPA rewrite', () => {
+    const vite = readFileSync(join(root, 'vite.config.js'), 'utf8');
+    assert.match(vite, /SEO_PAGES/);
+    const sitemap = readFileSync(join(root, 'public/sitemap.xml'), 'utf8');
+    for (const page of SEO_PAGES) {
+      assert.ok(!rules.some(([from]) => from === page.path), `${page.path} must not be rewritten to /`);
+      assert.ok(sitemap.includes(`<loc>https://lardermind.com${page.path}</loc>`), `sitemap missing ${page.path}`);
+      assert.equal(resolveAppRoute(page.path), 'mealime-alternative');
+      assert.ok(page.title.length <= 60, 'title should fit a SERP snippet');
+      assert.ok(page.description.length <= 200);
+    }
   });
 });

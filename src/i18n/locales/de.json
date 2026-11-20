@@ -546,7 +546,34 @@
       "privacy": "Datenschutz",
       "terms": "AGB",
       "contact": "Kontakt",
-      "copyright": "© 2026 LarderMind. Alle Rechte vorbehalten."
+      "copyright": "© 2026 LarderMind. Alle Rechte vorbehalten.",
+      "mealime": "Mealime-Alternative"
+    },
+    "sample": {
+      "eyebrow": "Beispielwoche",
+      "title": "So sieht eine Woche aus Ihrem Vorrat aus",
+      "exampleLabel": "Nur ein Beispiel, kein echter Plan. Ihrer entsteht aus dem, was Sie tatsächlich haben.",
+      "pantryNote": "Vorrat zum Start: Hähnchenschenkel, Reis, Eier, Zwiebeln, Knoblauch, Dosentomaten, Nudeln, Spinat, Olivenöl.",
+      "planHeading": "5 Abendessen",
+      "minutes": "{{count}} Min.",
+      "meals": {
+        "mon": "Knoblauchhähnchen mit Reis",
+        "tue": "Spinat-Tomaten-Nudeln",
+        "wed": "Gemüse-Reispfanne mit Ei",
+        "thu": "Tomaten-Eier aus dem Ofen mit Feta",
+        "fri": "Hähnchen, Spinat und Tomaten aus einer Pfanne"
+      },
+      "shoppingHeading": "Nur was fehlt",
+      "shopping": {
+        "i1": "Paprika ×2",
+        "i2": "Tiefkühlerbsen ×1 Beutel",
+        "i3": "Feta ×1 Block",
+        "i4": "Zitronen ×2",
+        "i5": "Frisches Basilikum ×1 Bund"
+      },
+      "cta": "Mit Ihrem Kühlschrank ausprobieren",
+      "pantryPrompt": "Mein Vorrat: Hähnchenschenkel, Reis, Eier, Zwiebeln, Knoblauch, Dosentomaten, Nudeln, Spinat, Olivenöl. Plane 5 einfache Abendessen unter der Woche für 2 Personen und liste nur auf, was mir fehlt.",
+      "freeProLine": "Kostenlos: Mahlzeiten aus Ihrem Vorrat planen. Pro (4,99 $/Monat): mehr KI-Anfragen und Funktionen, 7 Tage kostenlos testen."
     }
   },
   "pricing": {
@@ -619,5 +646,28 @@
       "pasta": "500g",
       "bag": "1 Beutel"
     }
+  },
+  "mealime": {
+    "metaTitle": "Mealime-Alternative - Woche neu aufbauen | LarderMind",
+    "metaDescription": "Mealime wurde am 21. Okt. 2026 eingestellt. LarderMind plant eine Woche Abendessen aus Ihrem Vorrat oder einem Foto Ihres Kühlschranks, mit einer Einkaufsliste nur für das, was fehlt. Kostenlos testen.",
+    "back": "LarderMind Startseite",
+    "eyebrow": "Mealime-Alternative",
+    "title": "Bauen Sie Ihre Mealime-Woche in Minuten neu auf",
+    "lead": "Mealime wurde am 21. Okt. 2026 eingestellt und hat die Pläne der Nutzer ohne Exportmöglichkeit gelöscht. LarderMind kann Ihre nächste Woche Abendessen aus dem planen, was Sie schon haben.",
+    "ctaButton": "Mit einer Mealime-Anfrage starten",
+    "ctaHint": "Öffnet einen kostenlosen Gast-Chat mit einer Startanfrage. Zum Ausprobieren ist keine Anmeldung nötig.",
+    "starterPrompt": "Ich habe Mealime benutzt. Plane 5 einfache Abendessen unter der Woche für 2 Personen aus dem, was ich habe:",
+    "whatTitle": "Was mit Mealime passiert ist",
+    "whatBody": "Mealime wurde am 21. Okt. 2026 eingestellt. Die Essenspläne der Nutzer wurden gelöscht, ein Export war nicht möglich. Sie lassen sich nicht zurückholen, aber Sie können schnell eine neue Woche beginnen.",
+    "howTitle": "Was LarderMind kann",
+    "bullet1": "Plant eine Woche Abendessen aus dem, was in Vorrat und Kühlschrank ist. Tippen Sie es ein oder machen Sie ein Foto Ihres Kühlschranks.",
+    "bullet2": "Erstellt eine Einkaufsliste nur mit dem, was fehlt.",
+    "bullet3": "Bietet Rezepte für die geplanten Mahlzeiten.",
+    "bullet4": "Funktioniert auf Englisch, Chinesisch, Spanisch, Französisch, Deutsch und Japanisch.",
+    "bullet5": "Kostenloser Tarif verfügbar. Pro kostet 4,99 $/Monat oder 39,99 $/Jahr, mit 7 Tagen Testzeit.",
+    "chatTitle": "Jetzt ausprobieren",
+    "signUp": "Kostenlos registrieren",
+    "login": "Anmelden",
+    "disclaimer": "LarderMind ist ein unabhängiges Produkt und steht in keiner Verbindung zu Mealime."
   }
 }

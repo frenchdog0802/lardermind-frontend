@@ -546,7 +546,34 @@
       "privacy": "Privacidad",
       "terms": "Términos",
       "contact": "Contacto",
-      "copyright": "© 2026 LarderMind. Todos los derechos reservados."
+      "copyright": "© 2026 LarderMind. Todos los derechos reservados.",
+      "mealime": "Alternativa a Mealime"
+    },
+    "sample": {
+      "eyebrow": "Semana de ejemplo",
+      "title": "Así se ve una semana hecha con tu despensa",
+      "exampleLabel": "Solo un ejemplo, no es un plan real. El tuyo se crea con lo que realmente tienes.",
+      "pantryNote": "Despensa inicial: muslos de pollo, arroz, huevos, cebollas, ajo, tomates enlatados, pasta, espinacas, aceite de oliva.",
+      "planHeading": "5 cenas",
+      "minutes": "{{count}} min",
+      "meals": {
+        "mon": "Pollo al ajo con arroz",
+        "tue": "Pasta con espinacas y tomate",
+        "wed": "Arroz frito con verduras y huevo",
+        "thu": "Huevos al horno con tomate y feta",
+        "fri": "Pollo, espinacas y tomate en una sola sartén"
+      },
+      "shoppingHeading": "Solo lo que falta",
+      "shopping": {
+        "i1": "Pimientos ×2",
+        "i2": "Guisantes congelados ×1 bolsa",
+        "i3": "Queso feta ×1 bloque",
+        "i4": "Limones ×2",
+        "i5": "Albahaca fresca ×1 manojo"
+      },
+      "cta": "Pruébalo con tu nevera",
+      "pantryPrompt": "Mi despensa: muslos de pollo, arroz, huevos, cebollas, ajo, tomates enlatados, pasta, espinacas, aceite de oliva. Planifica 5 cenas fáciles entre semana para 2 personas y enumera solo lo que me falta.",
+      "freeProLine": "Gratis: planifica comidas con tu despensa. Pro ($4.99/mes): más solicitudes de IA y funciones, 7 días de prueba gratis."
     }
   },
   "pricing": {
@@ -619,5 +646,28 @@
       "pasta": "500 g",
       "bag": "1 bolsa"
     }
+  },
+  "mealime": {
+    "metaTitle": "Alternativa a Mealime - Rehaz tu semana | LarderMind",
+    "metaDescription": "Mealime cerró el 21 de oct. de 2026. LarderMind planifica una semana de cenas con tu despensa o una foto de tu nevera, con una lista de compras solo de lo que falta. Pruébalo gratis.",
+    "back": "Inicio de LarderMind",
+    "eyebrow": "Alternativa a Mealime",
+    "title": "Rehaz tu semana de Mealime en minutos",
+    "lead": "Mealime cerró el 21 de oct. de 2026 y eliminó los planes de los usuarios sin opción de exportarlos. LarderMind puede planificar tu próxima semana de cenas con lo que ya tienes.",
+    "ctaButton": "Empezar con un mensaje al estilo Mealime",
+    "ctaHint": "Abre un chat de invitado gratuito con un mensaje inicial. No necesitas registrarte para probarlo.",
+    "starterPrompt": "Usaba Mealime. Planifica 5 cenas fáciles entre semana para 2 personas con lo que tengo:",
+    "whatTitle": "Qué pasó con Mealime",
+    "whatBody": "Mealime cerró el 21 de oct. de 2026. Los planes de comidas de los usuarios se eliminaron y no hubo forma de exportarlos. No se pueden recuperar, pero puedes empezar una nueva semana rápidamente.",
+    "howTitle": "Qué hace LarderMind",
+    "bullet1": "Planifica una semana de cenas con lo que hay en tu despensa y nevera. Escríbelo o haz una foto de tu nevera.",
+    "bullet2": "Crea una lista de compras solo con lo que falta.",
+    "bullet3": "Incluye recetas para las comidas que planifica.",
+    "bullet4": "Funciona en inglés, chino, español, francés, alemán y japonés.",
+    "bullet5": "Plan gratuito disponible. Pro cuesta $4.99/mes o $39.99/año, con 7 días de prueba.",
+    "chatTitle": "Pruébalo ahora",
+    "signUp": "Regístrate gratis",
+    "login": "Iniciar sesión",
+    "disclaimer": "LarderMind es un producto independiente y no está afiliado a Mealime."
   }
 }

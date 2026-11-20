@@ -6,6 +6,7 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 import { GuestChatBox } from './GuestChatBox';
 import { PricingSection } from './PricingSection';
 import { ProductPreviewMock } from './ProductPreviewMock';
+import { SampleWeek } from './SampleWeek';
 
 // The Remotion runtime is heavy; the static <img> below paints first, the Player loads after.
 const HeroPlayer = lazy(() => import('../remotion/HeroPlayer'));
@@ -102,6 +103,14 @@ function HeroVisual({ prefersReducedMotion }: { prefersReducedMotion: boolean })
 export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProps) {
   const { t } = useTranslation();
   const prefersReducedMotion = usePrefersReducedMotion();
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+
+  const tryWithFridge = (text: string) => {
+    setPrefill((prev) => ({ text, nonce: (prev?.nonce ?? 0) + 1 }));
+    document
+      .getElementById('demo-chat')
+      ?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'center' });
+  };
 
   return (
     <div className="min-h-screen bg-linen text-ink">
@@ -145,6 +154,8 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
         </div>
       </header>
 
+      <SampleWeek onTry={tryWithFridge} />
+
       <section id="demo-chat" className="border-t border-line bg-surface/60 px-[5%] py-20">
         <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2 lg:items-center">
           <RevealOnScroll>
@@ -187,6 +198,7 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
                   onGetStarted={onGetStarted}
                   showHeader={false}
                   size="large"
+                  prefill={prefill}
                 />
               </div>
             </div>
@@ -358,6 +370,11 @@ export function MarketingLanding({ onGetStarted, onLogin }: MarketingLandingProp
             <li>
               <a href="/legal/terms-of-service.html" className="hover:text-ink">
                 {t('landing.footer.terms')}
+              </a>
+            </li>
+            <li>
+              <a href="/mealime-alternative" className="hover:text-ink">
+                {t('landing.footer.mealime')}
               </a>
             </li>
             <li>

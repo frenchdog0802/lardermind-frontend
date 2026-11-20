@@ -543,7 +543,34 @@
       "privacy": "隱私權政策",
       "terms": "服務條款",
       "contact": "聯絡我們",
-      "copyright": "© 2026 LarderMind。保留所有權利。"
+      "copyright": "© 2026 LarderMind。保留所有權利。",
+      "mealime": "Mealime 替代方案"
+    },
+    "sample": {
+      "eyebrow": "示例一周",
+      "title": "用家里现有食材安排的一周是这样的",
+      "exampleLabel": "仅为示例，并非真实计划。你的计划会根据你实际拥有的食材生成。",
+      "pantryNote": "起始食材：鸡腿肉、米饭、鸡蛋、洋葱、大蒜、番茄罐头、意大利面、菠菜、橄榄油。",
+      "planHeading": "5 顿晚餐",
+      "minutes": "{{count}} 分钟",
+      "meals": {
+        "mon": "蒜香鸡肉配米饭",
+        "tue": "菠菜番茄意面",
+        "wed": "鸡蛋蔬菜炒饭",
+        "thu": "番茄焗蛋配菲达奶酪",
+        "fri": "一锅鸡肉菠菜番茄"
+      },
+      "shoppingHeading": "只买缺的",
+      "shopping": {
+        "i1": "彩椒 ×2",
+        "i2": "冷冻豌豆 ×1 袋",
+        "i3": "菲达奶酪 ×1 块",
+        "i4": "柠檬 ×2",
+        "i5": "新鲜罗勒 ×1 把"
+      },
+      "cta": "用你的冰箱试试",
+      "pantryPrompt": "我的食材：鸡腿肉、米饭、鸡蛋、洋葱、大蒜、番茄罐头、意大利面、菠菜、橄榄油。请为 2 个人安排 5 顿简单的工作日晚餐，并只列出我还缺的食材。",
+      "freeProLine": "免费版：用你的食材规划餐食。专业版（$4.99/月）：更多 AI 请求和功能，7 天免费试用。"
     }
   },
   "pricing": {
@@ -616,5 +643,28 @@
       "pasta": "500 公克",
       "bag": "1 袋"
     }
+  },
+  "mealime": {
+    "metaTitle": "Mealime 替代方案 - 重建你的一周餐单 | LarderMind",
+    "metaDescription": "Mealime 已于 2026 年 10 月 21 日停止服务。LarderMind 可根据你的食材或冰箱照片规划一周晚餐，并生成只包含所缺食材的购物清单。免费试用。",
+    "back": "LarderMind 首页",
+    "eyebrow": "Mealime 替代方案",
+    "title": "几分钟重建你的 Mealime 一周餐单",
+    "lead": "Mealime 已于 2026 年 10 月 21 日停止服务，并删除了用户的计划，且无法导出。LarderMind 可以根据你现有的食材规划下一周的晚餐。",
+    "ctaButton": "用 Mealime 风格的提示开始",
+    "ctaHint": "打开带有起始提示的免费访客聊天，无需注册即可试用。",
+    "starterPrompt": "我以前用 Mealime。请根据我现有的食材，为 2 个人安排 5 顿简单的工作日晚餐：",
+    "whatTitle": "Mealime 发生了什么",
+    "whatBody": "Mealime 已于 2026 年 10 月 21 日停止服务。用户的餐单被删除，也无法导出。这些计划无法找回，但你可以很快开始新的一周。",
+    "howTitle": "LarderMind 能做什么",
+    "bullet1": "根据你的食材和冰箱里的东西规划一周晚餐。可以手动输入，也可以拍一张冰箱照片。",
+    "bullet2": "生成只包含所缺食材的购物清单。",
+    "bullet3": "为所规划的餐食提供食谱。",
+    "bullet4": "支持英语、中文、西班牙语、法语、德语和日语。",
+    "bullet5": "提供免费版。专业版 $4.99/月或 $39.99/年，含 7 天试用。",
+    "chatTitle": "立即试用",
+    "signUp": "免费注册",
+    "login": "登录",
+    "disclaimer": "LarderMind 是独立产品，与 Mealime 没有任何关联。"
   }
 }
