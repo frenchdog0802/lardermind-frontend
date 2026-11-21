@@ -3,6 +3,10 @@ import { api } from './client';
 export interface UsageSummary {
   aiMessagesUsed: number;
   aiMessagesLimit: number;
+  /** 'week' (ISO week, Mon 00:00 UTC) for signed-in users; absent on older backends (treated as 'week'). */
+  aiMessagesPeriod?: 'day' | 'week';
+  /** Unix seconds (UTC) when the AI message counter resets. */
+  aiMessagesResetsAt?: number;
   recipeImportsUsed: number;
   recipeImportsLimit: number;
   recipeCount: number;
@@ -22,7 +26,7 @@ export interface SubscriptionStatus {
 }
 
 export interface TierComparison {
-  aiMessagesPerDay: number;
+  aiMessagesPerWeek: number;
   recipeImportsPerMonth: number;
   maxRecipes: number;
   imageUploadsPerMonth: number;

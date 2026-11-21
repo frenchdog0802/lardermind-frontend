@@ -165,7 +165,11 @@ export function SubscriptionPanel({
         <h3 className="text-sm font-semibold text-ink mb-3">Usage this period</h3>
         <ul className="space-y-2 text-sm">
           <UsageRow
-            label="AI messages today"
+            label={
+              usage.aiMessagesPeriod === 'day'
+                ? 'AI messages today'
+                : `AI messages this week${usage.aiMessagesResetsAt ? ` (resets ${formatDate(usage.aiMessagesResetsAt)})` : ''}`
+            }
             used={usage.aiMessagesUsed}
             limit={usage.aiMessagesLimit}
           />
@@ -200,7 +204,7 @@ export function SubscriptionPanel({
         <div className="border border-herb bg-sage/20 p-4">
           <h3 className="font-display text-lg font-semibold text-ink">Start your 7-day Pro trial</h3>
           <p className="mt-2 text-sm text-muted">
-            Try Pro free for 7 days — then 150 AI messages per day and unlimited recipes and uploads.
+            Try Pro free for 7 days — then 300 AI messages per week and unlimited recipes and uploads.
           </p>
           <p className="mt-3 text-sm text-muted">$4.99/month or $39.99/year after the trial.</p>
           <UpgradeButtons stripeEnabled={stripeEnabled} className="mt-4" />
